@@ -1,4 +1,4 @@
-from classifiers.metalazy import MetaLazyClassifier
+from metalazy.classifiers.metalazy import MetaLazyClassifier
 from sklearn import datasets
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import classification_report
