@@ -27,7 +27,8 @@ class MetaLazyClassifier(BaseEstimator, ClassifierMixin):
 
     # Classifiers to test for each dataset
     possible_weakers = ['nb', 'logistic', 'extrarf']
-    #possible_weakers = ['logistic']
+    #possible_weakers = ['nb']
+    possible_weakers_parallel = ['logistic','nb']
 
     # The grid params for each weaker classifier
     weaker_grid_params = {
@@ -36,9 +37,9 @@ class MetaLazyClassifier(BaseEstimator, ClassifierMixin):
         'nb': {'alpha': [0.001, 0.01, 0.1, 1, 10, 100]},
         'logistic': [{'penalty': ['l1', 'l2'], 'class_weight': ['balanced', None],
                       'solver': ['liblinear'], 'C': [0.1, 1.0, 10, 20]},
-                     # {'solver': ['lbfgs'], 'C': [1, 10, 0.1, 0.01], 'n_jobs': [-1],
-                     #  'class_weight': ['balanced', None],
-                     #  'multi_class': ['ovr', 'multinomial']}
+                      {'solver': ['lbfgs'], 'C': [1, 10, 0.1, 0.01],
+                       'class_weight': ['balanced', None],
+                       'multi_class': ['ovr', 'multinomial']}
                      ]
     }
 
@@ -119,11 +120,16 @@ class MetaLazyClassifier(BaseEstimator, ClassifierMixin):
         weaker = self.set_classifier(clf_name)
         tuned_parameters = self.weaker_grid_params[clf_name]
 
-        if clf_name == 'extrarf' and self.n_jobs > len(self.possible_weakers):
-            weaker.n_jobs = self.n_jobs - len(self.possible_weakers) + 1
+        if clf_name == 'extrarf':
+            print('rf')
+            weaker.n_jobs = self.n_jobs
+            grid_jobs = 1
+        else:
+            grid_jobs = self.n_jobs
+            weaker.n_jobs = 1
 
         start_grid = time.time()
-        grid = GridSearchCV(weaker, tuned_parameters, cv=3, scoring=score)
+        grid = GridSearchCV(weaker, tuned_parameters, cv=3, scoring=score, n_jobs=grid_jobs)
         grid.fit(X, y)
         end = time.time()
         print('{} Total grid time: {}'.format(clf_name,(end-start_grid)))
@@ -143,13 +149,14 @@ class MetaLazyClassifier(BaseEstimator, ClassifierMixin):
         print('Starting parallel process: {}'.format(self.n_jobs))
         # Creating arguments to parallel evaluation
         args = []
+        results = []
         for x in self.possible_weakers:
-            args.append((x, X_train_filtered, y_train_filtered, score))
+            #args.append((x, X_train_filtered, y_train_filtered, score))
+            results.append(self.avaliate_weaker(x, X_train_filtered, y_train_filtered, score))
 
         # TODO It is not totally parallel yet, the classifier or gridsearch may use more process
-        pool = mp.Pool(processes=self.n_jobs)
-        results = pool.starmap(self.avaliate_weaker,args)
-        print(results)
+        # with mp.Pool(processes=self.n_jobs) as pool:
+        #     results = pool.starmap(self.avaliate_weaker,args)
 
         best_score = 0.0
         best_clf = None
@@ -197,35 +204,52 @@ class MetaLazyClassifier(BaseEstimator, ClassifierMixin):
         return new_X_train, instance_comb
 
     # TODO se coloca o X no self é melhor em termos de memoria?
-    def predict_parallel(self, row, dists, X, pred):
+    def predict_parallel(self, batch, number_of_batches, idx, dists, X):
 
-        i, ids = row
+        max_size = idx.shape[0]
+        batch_size = int(max_size / float(number_of_batches))
+        from_id = batch * batch_size
+        until = ((batch+1) * batch_size) if ((batch + 1) * batch_size) < max_size else max_size
+        if (int(number_of_batches) - 1) == int(batch):
+            until = max_size
+        print('number of batches {} batch {} max {} - from {} until {}'.format(batch_size, batch, max_size, from_id, until))
 
-        # Filter the X_train with the neighbours
-        X_t = self.X_train[ids]
-        instance = X[[i]].copy()
+        idx_filtered = idx[from_id:until]
 
-        # Select features
-        if self.select_features:
-            X_t, instance = self.lazy_feature_selection(X_t, self.y_train[ids], X[i])
+        pred = np.zeros(((until - batch * batch_size), self.n_classes_))
 
-        # Create a specific classifier for this instance
-        weaker_aux = clone(self.weaker)
+        for i, ids in enumerate(idx_filtered):
 
-        # TODO Create co-occorrence features
+            # Getting the id inside the X_test
+            instance_id = i + from_id
 
-        # Find weights
-        weights = DistanceBasedWeight.define_weight(self.weight_function, self.y_train,
-                                                    dists[i], ids)
+            # Filter the X_train with the neighbours
+            X_t = self.X_train[ids]
+            instance = X[[instance_id]].copy()
 
-        # only fit the classifier if there is more than 1 class on the neighbourhood
-        if len(np.unique(self.y_train[ids])) > 1:
-            # fit the classifier
-            weaker_aux.fit(X_t, self.y_train[ids], weights)
-            pred[i, np.searchsorted(self.classes_, weaker_aux.classes_)] = weaker_aux.predict_proba(instance)[0]
-        else:
-            pred[i] = np.zeros((1, self.n_classes_))
-            pred[i][int(self.y_train[ids][0])] = 1.0
+            # Select features
+            if self.select_features:
+                X_t, instance = self.lazy_feature_selection(X_t, self.y_train[ids], X[instance_id])
+
+            # Create a specific classifier for this instance
+            weaker_aux = clone(self.weaker)
+
+            # TODO Create co-occorrence features
+
+            # Find weights
+            weights = DistanceBasedWeight.define_weight(self.weight_function, self.y_train,
+                                                        dists[instance_id], ids)
+
+            # only fit the classifier if there is more than 1 class on the neighbourhood
+            if len(np.unique(self.y_train[ids])) > 1:
+                # fit the classifier
+                weaker_aux.fit(X_t, self.y_train[ids], weights)
+                pred[i, np.searchsorted(self.classes_, weaker_aux.classes_)] = weaker_aux.predict_proba(instance)[0]
+            else:
+                pred[i] = np.zeros((1, self.n_classes_))
+                pred[i][int(self.y_train[ids][0])] = 1.0
+
+        return pred
 
     def predict_proba(self, X):
 
@@ -248,46 +272,15 @@ class MetaLazyClassifier(BaseEstimator, ClassifierMixin):
         # TODO use fastKNN
         dists, idx = self.kNN.kneighbors(X, return_distance=True)
 
-        # Start the prediction with zeros
-        pred = np.zeros((len(idx), self.n_classes_))
+        # Creating arguments to parallel evaluation
+        args = []
+        for batch in range(0,self.n_jobs):
+            args.append((batch, self.n_jobs, idx, dists, X))
 
-        print('Starting the prediction in parallel {}'.format(self.n_jobs))
-        pool = mp.Pool(self.n_jobs)
-        [pool.apply(self.predict_parallel, args=(row, dists, X, pred)) for row in enumerate(idx)]
-        #
-        # # for each test instance
-        # for i, ids in enumerate(idx):
-        #
-        #     if i % 500 == 0:
-        #         print('Predicted {} instances'.format(i))
-        #
-        #     # Filter the X_train with the neighbours
-        #     X_t = self.X_train[ids]
-        #     instance = X[[i]].copy()
-        #
-        #     # TODO Chamar funcao paralela aqui
-        #
-        #     # Select features
-        #     if self.select_features:
-        #         X_t, instance = self.lazy_feature_selection(X_t, self.y_train[ids], X[i])
-        #
-        #     # Create a specific classifier for this instance
-        #     weaker_aux = clone(self.weaker)
-        #
-        #     # TODO Create co-occorrence features
-        #
-        #     # Find weights
-        #     weights = DistanceBasedWeight.define_weight(self.weight_function, self.y_train,
-        #                                                 dists[i], ids)
-        #
-        #     # only fit the classifier if there is more than 1 class on the neighbourhood
-        #     if len(np.unique(self.y_train[ids])) > 1:
-        #         # fit the classifier
-        #         weaker_aux.fit(X_t, self.y_train[ids], weights)
-        #         pred[i, np.searchsorted(self.classes_, weaker_aux.classes_)] = weaker_aux.predict_proba(instance)[0]
-        #     else:
-        #         pred[i] = np.zeros((1, self.n_classes_))
-        #         pred[i][int(self.y_train[ids][0])] = 1.0
+        # Calling one proccess for each batch
+        with mp.Pool(processes=self.n_jobs) as pool:
+            results = pool.starmap(self.predict_parallel, args)
+        pred = np.concatenate(results,axis=0)
 
         return pred
 
@@ -299,4 +292,5 @@ class MetaLazyClassifier(BaseEstimator, ClassifierMixin):
         :return:
         '''
         pred = self.predict_proba(X)
+        print(pred.shape)
         return self.classes_.take(np.argmax(pred, axis=1), axis=0)

@@ -1,5 +1,5 @@
-from utils.dataset_reader import DatasetReader
-from classifiers.metalazy import MetaLazyClassifier
+from metalazy.utils.dataset_reader import DatasetReader
+from metalazy.classifiers.metalazy import MetaLazyClassifier
 from sklearn.metrics import classification_report
 from sklearn.metrics import f1_score
 import numpy as np

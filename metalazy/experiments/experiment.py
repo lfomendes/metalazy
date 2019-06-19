@@ -24,8 +24,8 @@ def fit(clf, X_train, y_train, time_dic):
 def predict(clf, X_test, time_dic):
     start_pred = time.time()
     y_pred = clf.predict(X_test)
-    end = time.time()
-    time_dic['pred'] = (end - start_pred)
+    end_pred = time.time()
+    time_dic['pred'] = (end_pred - start_pred)
     print('Total pred time: {}'.format(time_dic['pred']))
 
     return y_pred
@@ -61,13 +61,12 @@ def main():
         time_dic = {}
         print('FOLD {}'.format(fold))
 
-
         # Load the regular data
         X_train, y_train, X_test, y_test = dataset_reader.get_next_fold()
 
         # Create the classifier
         clf = MetaLazyClassifier(n_neighbors=k, select_features=False, weight_function=weight_function,
-                                 n_jobs=-1)
+                                 n_jobs=4)
 
         # Fit the train data
         fit(clf, X_train, y_train, time_dic)
