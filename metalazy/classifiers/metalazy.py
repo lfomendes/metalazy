@@ -12,6 +12,7 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.ensemble import RandomForestClassifier, ExtraTreesClassifier
 from sklearn.neighbors import NearestNeighbors
 from metalazy.utils.distanced_based_weights import DistanceBasedWeight
+from metalazy.utils.cooccurrence import Cooccurrence
 from sklearn.feature_selection import SelectPercentile, chi2
 import multiprocessing as mp
 
@@ -26,9 +27,8 @@ class MetaLazyClassifier(BaseEstimator, ClassifierMixin):
     }
 
     # Classifiers to test for each dataset
-    possible_weakers = ['nb', 'logistic', 'extrarf']
-    #possible_weakers = ['nb']
-    possible_weakers_parallel = ['logistic','nb']
+    #possible_weakers = ['nb', 'logistic', 'extrarf']
+    possible_weakers = ['nb']
 
     # The grid params for each weaker classifier
     weaker_grid_params = {
@@ -36,15 +36,16 @@ class MetaLazyClassifier(BaseEstimator, ClassifierMixin):
                      'n_estimators': [100, 200]}],
         'nb': {'alpha': [0.001, 0.01, 0.1, 1, 10, 100]},
         'logistic': [{'penalty': ['l1', 'l2'], 'class_weight': ['balanced', None],
-                      'solver': ['liblinear'], 'C': [0.1, 1.0, 10, 20]},
-                      {'solver': ['lbfgs'], 'C': [1, 10, 0.1, 0.01],
-                       'class_weight': ['balanced', None],
-                       'multi_class': ['ovr', 'multinomial']}
+                      'solver': ['liblinear'], 'C': [0.1, 1.0, 10], 'max_iter': [300, 500]},
+                     # {'solver': ['lbfgs'], 'C': [1, 10, 0.1, 0.01],
+                     #  'class_weight': ['balanced', None],
+                     #  'multi_class': ['ovr', 'multinomial']}
                      ]
     }
 
     def __init__(self, specific_classifier=None, n_jobs=-1, n_neighbors=200, metric='cosine',
-                 grid_size=1000, weight_function='inverse', select_features=False, random_state=42):
+                 grid_size=1000, weight_function='inverse', number_of_cooccurrences=10, select_features=False,
+                 random_state=42):
         """
         TODO
         """
@@ -52,10 +53,12 @@ class MetaLazyClassifier(BaseEstimator, ClassifierMixin):
         self.grid_size = grid_size
         self.weight_function = weight_function
         self.select_features = select_features
+        self.number_of_cooccurrences = number_of_cooccurrences
 
         # everyone's params
         self.n_jobs = mp.cpu_count() if n_jobs == -1 else n_jobs
         self.random_state = random_state
+        np.random.seed(seed=random_state)
 
         # kNN params
         self.n_neighbors = n_neighbors
@@ -132,7 +135,7 @@ class MetaLazyClassifier(BaseEstimator, ClassifierMixin):
         grid = GridSearchCV(weaker, tuned_parameters, cv=3, scoring=score, n_jobs=grid_jobs)
         grid.fit(X, y)
         end = time.time()
-        print('{} Total grid time: {}'.format(clf_name,(end-start_grid)))
+        print('{} Total grid time: {}'.format(clf_name, (end - start_grid)))
         return grid.best_score_, grid.best_estimator_
 
     def find_best_weaker_classifier(self, X_train, y_train, score='f1_macro'):
@@ -151,7 +154,7 @@ class MetaLazyClassifier(BaseEstimator, ClassifierMixin):
         args = []
         results = []
         for x in self.possible_weakers:
-            #args.append((x, X_train_filtered, y_train_filtered, score))
+            # args.append((x, X_train_filtered, y_train_filtered, score))
             results.append(self.avaliate_weaker(x, X_train_filtered, y_train_filtered, score))
 
         # TODO It is not totally parallel yet, the classifier or gridsearch may use more process
@@ -189,7 +192,9 @@ class MetaLazyClassifier(BaseEstimator, ClassifierMixin):
 
         if self.specific_classifier:
             # choose the weaker classifier
-            self.set_classifier(name=self.specific_classifier)
+            best_score, self.weaker = self.avaliate_weaker(self, self.specific_classifier, self.X_train, self.y_train, score='f1_macro')
+            #self.set_classifier(name=self.specific_classifier)
+            print('Best score was {} with \n {}').format(best_score, self.weaker)
         else:
             # test which classifier is the best for this specific dataset
             self.find_best_weaker_classifier(X, y)
@@ -206,25 +211,29 @@ class MetaLazyClassifier(BaseEstimator, ClassifierMixin):
     # TODO se coloca o X no self é melhor em termos de memoria?
     def predict_parallel(self, batch, number_of_batches, idx, dists, X):
 
+        # Defining which instances this function will proccess
         max_size = idx.shape[0]
         batch_size = int(max_size / float(number_of_batches))
         from_id = batch * batch_size
-        until = ((batch+1) * batch_size) if ((batch + 1) * batch_size) < max_size else max_size
+        until = ((batch + 1) * batch_size) if ((batch + 1) * batch_size) < max_size else max_size
         if (int(number_of_batches) - 1) == int(batch):
             until = max_size
-        print('number of batches {} batch {} max {} - from {} until {}'.format(batch_size, batch, max_size, from_id, until))
+        print('number of batches {} batch {} max {} - from {} until {}'.format(batch_size, batch, max_size, from_id,
+                                                                             until))
 
+        # filtered ids
         idx_filtered = idx[from_id:until]
 
         pred = np.zeros(((until - batch * batch_size), self.n_classes_))
 
+        # for each one of these instances
         for i, ids in enumerate(idx_filtered):
 
             # Getting the id inside the X_test
             instance_id = i + from_id
 
             # Filter the X_train with the neighbours
-            X_t = self.X_train[ids]
+            X_t = self.X_train[ids].copy()
             instance = X[[instance_id]].copy()
 
             # Select features
@@ -234,8 +243,10 @@ class MetaLazyClassifier(BaseEstimator, ClassifierMixin):
             # Create a specific classifier for this instance
             weaker_aux = clone(self.weaker)
 
-            # TODO Create co-occorrence features
-
+            # Create co-occorrence features
+            X_t, instance = Cooccurrence.cooccurrence(X_t, instance,
+                                                      number_of_cooccurrences=self.number_of_cooccurrences,
+                                                      seed_value=42)
             # Find weights
             weights = DistanceBasedWeight.define_weight(self.weight_function, self.y_train,
                                                         dists[instance_id], ids)
@@ -274,13 +285,13 @@ class MetaLazyClassifier(BaseEstimator, ClassifierMixin):
 
         # Creating arguments to parallel evaluation
         args = []
-        for batch in range(0,self.n_jobs):
+        for batch in range(0, self.n_jobs):
             args.append((batch, self.n_jobs, idx, dists, X))
 
         # Calling one proccess for each batch
         with mp.Pool(processes=self.n_jobs) as pool:
             results = pool.starmap(self.predict_parallel, args)
-        pred = np.concatenate(results,axis=0)
+        pred = np.concatenate(results, axis=0)
 
         return pred
 

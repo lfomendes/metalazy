@@ -82,18 +82,20 @@ class DistanceBasedWeight:
         weights = None
 
         # Create a classifier with and without
-        classes_unique = np.unique(y_train[neigh_ind_base[0]])
+        classes_unique = np.unique(y_train[neigh_ind_base])
         if len(classes_unique) > 1:
             if weight_func == 'cosine':
-                weights = DistanceBasedWeight.cosine_similarity(neigh_dist_base[0])
+                weights = DistanceBasedWeight.cosine_similarity(neigh_dist_base)
             elif weight_func == 'cosine2':
-                weights = DistanceBasedWeight.cosine_similarity(neigh_dist_base[0],2.0)
+                weights = DistanceBasedWeight.cosine_similarity(neigh_dist_base,2.0)
             elif weight_func == 'inverse':
-                weights = DistanceBasedWeight.inverse_formula(neigh_dist_base[0])
+                weights = DistanceBasedWeight.inverse_formula(neigh_dist_base)
             elif weight_func == 'sigmoid':
-                weights = DistanceBasedWeight.sigmoid_function(neigh_dist_base[0])
+                weights = DistanceBasedWeight.sigmoid_function(neigh_dist_base)
             elif weight_func == 'wknn':
-                weights = DistanceBasedWeight.wknn_weights(neigh_dist_base[0])
+                weights = DistanceBasedWeight.wknn_weights(neigh_dist_base)
             elif weight_func == 'dwknn':
-                weights = DistanceBasedWeight.dwknn_weights(neigh_dist_base[0])
+                weights = DistanceBasedWeight.dwknn_weights(neigh_dist_base)
+            elif weight_func == 'none':
+                weights = np.ones(len(neigh_dist_base))
         return weights
