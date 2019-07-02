@@ -2,6 +2,7 @@ from metalazy.utils.dataset_reader import DatasetReader
 from metalazy.classifiers.metalazy import MetaLazyClassifier
 from sklearn.metrics import classification_report
 from sklearn.naive_bayes import MultinomialNB
+from sklearn.model_selection import GridSearchCV
 from sklearn.metrics import f1_score
 import pandas as pd
 import numpy as np
@@ -41,10 +42,6 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('-p', help='path to the directory with  libsvm files')
     parser.add_argument('-o', help='path to the output directory')
-    parser.add_argument('-c', help='classifier')
-    parser.add_argument('-k', help='number of neighbours')
-    parser.add_argument('-w', help='weight function')
-    parser.add_argument('-f', help='number of cooc features - default 10')
     parser.add_argument('-j', help='number of jobs to run in parallel. use -1 for all - Default:-1')
     parser.add_argument('-g', help='Size of the sample to the hyperparameter search - Default-5000')
 
@@ -55,13 +52,6 @@ def main():
         os.makedirs(output_path)
 
     path = args.p
-    k = int(args.k)
-    weight_function = args.w
-    classifier_name = args.c
-
-    n_cooc = 10
-    if args.f:
-        n_cooc = int(args.f)
 
     n_jobs = -1
     if args.j:
@@ -86,24 +76,43 @@ def main():
         X_train, y_train, X_test, y_test = dataset_reader.get_next_fold()
 
         # Create the classifier
-        clf = MetaLazyClassifier(specific_classifier=classifier_name, n_neighbors=k, select_features=False,
-                                 weight_function=weight_function, n_jobs=n_jobs,
-                                 grid_size=grid_size, number_of_cooccurrences=n_cooc)
+        clf = MetaLazyClassifier(select_features=False,
+                                 n_jobs=n_jobs,
+                                 grid_size=grid_size)
+
+        # tuned_parameters = [{'specific_classifier': ['nb'],
+        #                      'weight_function': ['none', 'cosine', 'inverse'],
+        #                      'n_neighbors': [200, 50], 'number_of_cooccurrences': [1, 10]}]
+
+        #tuned_parameters = [{'specific_classifier': ['nb', 'logistic', 'extrarf'],
+        tuned_parameters = [{'specific_classifier': ['logistic'],
+                             'weight_function': ['none', 'cosine', 'inverse'],
+                              'n_neighbors': [100, 50], 'number_of_cooccurrences': [0, 5, 10]}]
+
+        print('GENERAL STARTING')
+        start_grid = time.time()
+        grid = GridSearchCV(clf, tuned_parameters, cv=3, scoring='f1_macro', n_jobs=1)
+        grid.fit(X_train, y_train)
+        end = time.time()
+        print('GENERAL - Total grid time: {}'.format((end - start_grid)))
+        print('GENERAL - Best score was {} with \n {}'.format(grid.best_score_, grid.best_estimator_))
+
+        grid.best_score_, grid.best_estimator_
 
         # Fit the train data
-        fit(clf, X_train, y_train, time_dic)
+        fit(grid.best_estimator_, X_train, y_train, time_dic)
 
         # Predict
-        y_pred = predict(clf, X_test, time_dic)
+        y_pred = predict(grid.best_estimator_, X_test, time_dic)
 
-        print(str(clf))
-        print(str(clf.weaker))
+        print(str(grid.best_estimator_))
+        print(str(grid.best_estimator_.weaker))
         # Save the result
         result.append({
             'macro': f1_score(y_true=y_test, y_pred=y_pred, average='macro'),
             'micro': f1_score(y_true=y_test, y_pred=y_pred, average='micro'),
-            'config': str(clf),
-            'best_clf': str(clf.weaker),
+            'config': str(grid.best_estimator_),
+            'best_clf': str(grid.best_estimator_.weaker),
         })
 
         print('Macro: {}'.format(f1_score(y_true=y_test, y_pred=y_pred, average='macro')))

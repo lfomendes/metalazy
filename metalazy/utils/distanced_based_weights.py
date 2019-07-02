@@ -3,7 +3,7 @@ from scipy.sparse import vstack
 
 class DistanceBasedWeight:
 
-    def cosine_similarity(self, distance, multiplier=1.0):
+    def cosine_similarity(distance, multiplier=1.0):
         '''
         Cosine similarity with multiplier
 
@@ -85,9 +85,9 @@ class DistanceBasedWeight:
         classes_unique = np.unique(y_train[neigh_ind_base])
         if len(classes_unique) > 1:
             if weight_func == 'cosine':
-                weights = DistanceBasedWeight.cosine_similarity(neigh_dist_base)
+                weights = DistanceBasedWeight.cosine_similarity(distance=neigh_dist_base, multiplier=1.0)
             elif weight_func == 'cosine2':
-                weights = DistanceBasedWeight.cosine_similarity(neigh_dist_base,2.0)
+                weights = DistanceBasedWeight.cosine_similarity(distance=neigh_dist_base, multiplier=2.0)
             elif weight_func == 'inverse':
                 weights = DistanceBasedWeight.inverse_formula(neigh_dist_base)
             elif weight_func == 'sigmoid':

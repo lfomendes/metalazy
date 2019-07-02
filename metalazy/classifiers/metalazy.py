@@ -58,7 +58,6 @@ class MetaLazyClassifier(BaseEstimator, ClassifierMixin):
         # everyone's params
         self.n_jobs = mp.cpu_count() if n_jobs == -1 else n_jobs
         self.random_state = random_state
-        np.random.seed(seed=random_state)
 
         # kNN params
         self.n_neighbors = n_neighbors
@@ -74,6 +73,7 @@ class MetaLazyClassifier(BaseEstimator, ClassifierMixin):
 
         # setting the seed
         random.seed(random_state)
+        np.random.seed(seed=random_state)
 
     def set_classifier(self, name, specif_jobs=1):
         '''
@@ -119,12 +119,10 @@ class MetaLazyClassifier(BaseEstimator, ClassifierMixin):
         :param score:
         :return:
         '''
-        print('MP:{}'.format(clf_name))
-        weaker = self.set_classifier(clf_name)
+        weaker = self.set_classifier(name=clf_name)
         tuned_parameters = self.weaker_grid_params[clf_name]
 
         if clf_name == 'extrarf':
-            print('rf')
             weaker.n_jobs = self.n_jobs
             grid_jobs = 1
         else:
@@ -136,6 +134,8 @@ class MetaLazyClassifier(BaseEstimator, ClassifierMixin):
         grid.fit(X, y)
         end = time.time()
         print('{} Total grid time: {}'.format(clf_name, (end - start_grid)))
+        print('Best score was {} with \n {}'.format(grid.best_score_, grid.best_estimator_))
+
         return grid.best_score_, grid.best_estimator_
 
     def find_best_weaker_classifier(self, X_train, y_train, score='f1_macro'):
@@ -153,13 +153,8 @@ class MetaLazyClassifier(BaseEstimator, ClassifierMixin):
         # Creating arguments to parallel evaluation
         args = []
         results = []
-        for x in self.possible_weakers:
-            # args.append((x, X_train_filtered, y_train_filtered, score))
-            results.append(self.avaliate_weaker(x, X_train_filtered, y_train_filtered, score))
-
-        # TODO It is not totally parallel yet, the classifier or gridsearch may use more process
-        # with mp.Pool(processes=self.n_jobs) as pool:
-        #     results = pool.starmap(self.avaliate_weaker,args)
+        for clf_name in self.possible_weakers:
+            results.append(self.avaliate_weaker(clf_name, X_train_filtered, y_train_filtered, score))
 
         best_score = 0.0
         best_clf = None
@@ -192,9 +187,7 @@ class MetaLazyClassifier(BaseEstimator, ClassifierMixin):
 
         if self.specific_classifier:
             # choose the weaker classifier
-            best_score, self.weaker = self.avaliate_weaker(self, self.specific_classifier, self.X_train, self.y_train, score='f1_macro')
-            #self.set_classifier(name=self.specific_classifier)
-            print('Best score was {} with \n {}').format(best_score, self.weaker)
+            best_score, self.weaker = self.avaliate_weaker(self.specific_classifier, self.X_train, self.y_train, score='f1_macro')
         else:
             # test which classifier is the best for this specific dataset
             self.find_best_weaker_classifier(X, y)
@@ -218,8 +211,8 @@ class MetaLazyClassifier(BaseEstimator, ClassifierMixin):
         until = ((batch + 1) * batch_size) if ((batch + 1) * batch_size) < max_size else max_size
         if (int(number_of_batches) - 1) == int(batch):
             until = max_size
-        print('number of batches {} batch {} max {} - from {} until {}'.format(batch_size, batch, max_size, from_id,
-                                                                             until))
+        # print('number of batches {} batch {} max {} - from {} until {}'.format(batch_size, batch, max_size, from_id,
+        #                                                                      until))
 
         # filtered ids
         idx_filtered = idx[from_id:until]
