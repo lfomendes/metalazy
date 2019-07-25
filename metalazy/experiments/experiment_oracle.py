@@ -44,7 +44,7 @@ def choose_tunning_parameters(specific, weight, coccurrence):
 
     classifiers = ['logistic', 'nb', 'extrarf']
     if coccurrence == 1:
-        tuned_parameters[0].update({'number_of_cooccurrences': [5, 10, 20]})
+        tuned_parameters[0].update({'number_of_cooccurrences': [10]})
     if weight == 1:
         tuned_parameters[0].update({'weight_function': ['cosine', 'inverse', 'dwknn']})
     if specific == 1:
@@ -54,11 +54,40 @@ def choose_tunning_parameters(specific, weight, coccurrence):
 
     return tuned_parameters
 
+import copy
+
+def get_best_estimator_for_specific_classifier(X_train,y_train, specific ,n_jobs, grid_size, fold):
+
+    # Create the classifier
+    clf = MetaLazyClassifier( specific_classifier=specific,
+                             select_features=False,
+                             n_jobs=n_jobs,
+                             grid_size=grid_size)
+
+    tuned_parameters = {'weight_function': ['cosine', 'inverse', 'dwknn'], 'number_of_cooccurrences': [5, 15]}
+
+    # first we find the best configuration in general
+    print('GRID SEARCH FOR FOLD {}'.format(fold))
+    start_grid = time.time()
+    grid = GridSearchCV(clf, tuned_parameters, cv=3, scoring='f1_macro', n_jobs=1)
+    grid.fit(X_train, y_train)
+    end = time.time()
+    print('GENERAL - Total grid time: {}'.format((end - start_grid)))
+    print('GENERAL - Best score was {} with \n {}'.format(grid.best_score_, grid.best_estimator_))
+
+    estimator = grid.best_estimator_
+    best_param = grid.best_params_
+
+    print('GENERAL - Best param was {}\n'.format(grid.best_params_))
+
+    return estimator
+
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('-p', help='path to the directory with  libsvm files')
     parser.add_argument('-o', help='path to the output directory')
+    parser.add_argument('-s', help='if should be hyperparameter search for metalazy')
     parser.add_argument('-j', help='number of jobs to run in parallel. use -1 for all - Default:-1')
     parser.add_argument('-g', help='Size of the sample to the hyperparameter search - Default-5000')
 
@@ -69,6 +98,8 @@ def main():
         os.makedirs(output_path)
 
     path = args.p
+
+    search_params = args.s == 'true'
 
     n_jobs = -1
     if args.j:
@@ -84,9 +115,7 @@ def main():
     result = []
     times = []
 
-    configurations = {'specific_classifier': [0, 1],
-                      'weight': [0, 1],
-                      'cooccurrence': [0, 1]}
+    specific_classifier = ['nb','logistic','extrarf']
 
     start = time.time()
     while dataset_reader.has_next():
@@ -96,72 +125,44 @@ def main():
         # Load the regular data
         X_train, y_train, X_test, y_test = dataset_reader.get_next_fold()
 
-        # Create the classifier
-        clf = MetaLazyClassifier(select_features=False,
-                                 n_jobs=n_jobs,
-                                 grid_size=grid_size)
+        result_df = pd.DataFrame()
 
         # for each fold we vary weight function, number of co occurrences and the choosing of the classifier
-        for specific in configurations['specific_classifier']:
-            for weight in configurations['weight']:
-                for cooccurrence in configurations['cooccurrence']:
-                    print(
-                        'Running for specific {}, weight {} and cooccurrence {}'.format(specific, weight, cooccurrence))
+        for specific in specific_classifier:
+            print('Running for specific {}'.format(specific))
 
-                    tuned_parameters = choose_tunning_parameters(specific=specific, weight=weight,
-                                                                 coccurrence=cooccurrence)
+            # setting the 0 configurations (turn off cooc or weight)
+            if search_params:
+                estimator = get_best_estimator_for_specific_classifier(X_train, y_train, specific ,n_jobs, grid_size, fold)
+            else:
+                estimator =  MetaLazyClassifier( specific_classifier=specific,
+                             select_features=False,
+                             n_jobs=n_jobs,
+                             grid_size=grid_size)
 
-                    print('GENERAL STARTING')
-                    start_grid = time.time()
-                    grid = GridSearchCV(clf, tuned_parameters, cv=3, scoring='f1_macro', n_jobs=1)
-                    grid.fit(X_train, y_train)
-                    end = time.time()
-                    print('GENERAL - Total grid time: {}'.format((end - start_grid)))
-                    print('GENERAL - Best score was {} with \n {}'.format(grid.best_score_, grid.best_estimator_))
+            # Fit the train data
+            fit(estimator, X_train, y_train, time_dic)
 
-                    grid.best_score_, grid.best_estimator_
+            # Predict
+            y_pred = predict(estimator, X_test, time_dic)
 
-                    # Fit the train data
-                    fit(grid.best_estimator_, X_train, y_train, time_dic)
+            # Save the result
+            result_df[specific] = y_pred
 
-                    # Predict
-                    y_pred = predict(grid.best_estimator_, X_test, time_dic)
+        result_df['y_test'] = y_test
 
-                    print(str(grid.best_estimator_))
-                    print(str(grid.best_estimator_.weaker))
-                    # Save the result
-                    result.append({
-                        'macro': f1_score(y_true=y_test, y_pred=y_pred, average='macro'),
-                        'micro': f1_score(y_true=y_test, y_pred=y_pred, average='micro'),
-                        'config': str(grid.best_estimator_),
-                        'best_clf': str(grid.best_estimator_.weaker),
-                    })
-
-                    configuration = {'weight': weight, 'specific': specific, 'cooc': cooccurrence}
-
-                    result[-1].update(configuration)
-
-        print('Macro: {}'.format(f1_score(y_true=y_test, y_pred=y_pred, average='macro')))
-        print('Micro: {}'.format(f1_score(y_true=y_test, y_pred=y_pred, average='micro')))
         times.append(time_dic)
         fold = fold + 1
 
-        result_dataframe = pd.DataFrame(data=result)
-        print(result_dataframe.head(10))
-        result_dataframe.to_csv(output_path + '/result_factorial.csv', index=False)
+        print(result_df.head(10))
+        result_df.to_csv(output_path + '/result_oracle_fold_{}.csv'.format(fold), index=False)
 
         times_dataframe = pd.DataFrame(data=times)
         print(times_dataframe.head(10))
         times_dataframe.to_csv(output_path + '/times.csv', index=False)
 
-    print(result)
-
     end = time.time()
     print('Total time: {}'.format((end - start)))
-
-    result_dataframe = pd.DataFrame(data=result)
-    print(result_dataframe.head(10))
-    result_dataframe.to_csv(output_path + '/result_factorial.csv', index=False)
 
     times_dataframe = pd.DataFrame(data=times)
     print(times_dataframe.head(10))

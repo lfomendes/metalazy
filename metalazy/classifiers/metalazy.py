@@ -27,16 +27,23 @@ class MetaLazyClassifier(BaseEstimator, ClassifierMixin):
     }
 
     # Classifiers to test for each dataset
-    #possible_weakers = ['nb', 'logistic', 'extrarf']
-    possible_weakers = ['nb']
+    possible_weakers = ['nb', 'logistic', 'extrarf']
+    #possible_weakers = ['nb']
 
     # The grid params for each weaker classifier
     weaker_grid_params = {
-        'extrarf': [{'criterion': ['gini', 'entropy'], 'max_features': ['sqrt', 0.3, 'log2'],
-                     'n_estimators': [100, 200]}],
+
+        # 'extrarf': [{'criterion': ['gini'], 'max_features': ['sqrt'],
+        #              'n_estimators': [200]}],
+        # 'nb': {'alpha': [1]},
+        # 'logistic': [{'penalty': ['l2'], 'class_weight': ['balanced'],
+        #               'solver': ['liblinear'], 'C': [1.0], 'max_iter': [500]},
+        #
+        'extrarf': [{'criterion': ['gini', 'entropy'], 'max_features': ['sqrt', 'log2'],
+                     'n_estimators': [200]}],
         'nb': {'alpha': [0.001, 0.01, 0.1, 1, 10, 100]},
-        'logistic': [{'penalty': ['l1', 'l2'], 'class_weight': ['balanced', None],
-                      'solver': ['liblinear'], 'C': [0.1, 1.0, 10], 'max_iter': [300, 500]},
+        'logistic': [{'penalty': ['l2'], 'class_weight': ['balanced', None],
+                      'solver': ['liblinear'], 'C': [0.1, 1.0, 10], 'max_iter': [500]},
                      # {'solver': ['lbfgs'], 'C': [1, 10, 0.1, 0.01],
                      #  'class_weight': ['balanced', None],
                      #  'multi_class': ['ovr', 'multinomial']}
@@ -133,8 +140,8 @@ class MetaLazyClassifier(BaseEstimator, ClassifierMixin):
         grid = GridSearchCV(weaker, tuned_parameters, cv=3, scoring=score, n_jobs=grid_jobs)
         grid.fit(X, y)
         end = time.time()
-        print('{} Total grid time: {}'.format(clf_name, (end - start_grid)))
-        print('Best score was {} with \n {}'.format(grid.best_score_, grid.best_estimator_))
+        # print('{} Total grid time: {}'.format(clf_name, (end - start_grid)))
+        # print('Best score was {} with \n {}'.format(grid.best_score_, grid.best_estimator_))
 
         return grid.best_score_, grid.best_estimator_
 
@@ -167,7 +174,7 @@ class MetaLazyClassifier(BaseEstimator, ClassifierMixin):
                 best_score = value
                 best_clf = estimator
 
-        print('Best Classifier: {}\n\n'.format(best_clf))
+        #print('Best Classifier: {}\n\n'.format(best_clf))
         self.weaker = best_clf
 
     def fit(self, X, y=None):
@@ -296,5 +303,5 @@ class MetaLazyClassifier(BaseEstimator, ClassifierMixin):
         :return:
         '''
         pred = self.predict_proba(X)
-        print(pred.shape)
+        #print(pred.shape)
         return self.classes_.take(np.argmax(pred, axis=1), axis=0)

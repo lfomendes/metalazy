@@ -44,15 +44,31 @@ def choose_tunning_parameters(specific, weight, coccurrence):
 
     classifiers = ['logistic', 'nb', 'extrarf']
     if coccurrence == 1:
-        tuned_parameters[0].update({'number_of_cooccurrences': [5, 10, 20]})
+        tuned_parameters[0].update({'number_of_cooccurrences': [5,10]})
     if weight == 1:
-        tuned_parameters[0].update({'weight_function': ['cosine', 'inverse', 'dwknn']})
+        tuned_parameters[0].update({'weight_function': ['cosine', 'inverse']})
     if specific == 1:
         tuned_parameters[0].update({'specific_classifier': classifiers})
     else:
         tuned_parameters[0].update({'specific_classifier': random.sample(classifiers, 1)})
 
     return tuned_parameters
+
+import copy
+
+def reset_configurations(clf, grid_param, specific, weight, coccurrence):
+    param_dict = copy.deepcopy(grid_param)
+    classifiers = ['logistic', 'nb', 'extrarf']
+    print(param_dict)
+    if coccurrence == 0:
+        param_dict.update({'number_of_cooccurrences': 0})
+    if weight == 0:
+        param_dict.update({'weight_function': 'none'})
+    if specific == 0:
+        param_dict.update({'specific_classifier': random.sample(classifiers, 1)[0]})
+    clf.set_params(**param_dict)
+    print(clf.get_params())
+    return clf
 
 
 def main():
@@ -101,28 +117,33 @@ def main():
                                  n_jobs=n_jobs,
                                  grid_size=grid_size)
 
+        tuned_parameters = choose_tunning_parameters(specific=1, weight=1,coccurrence=1)
+
+        # first we find the best configuration in general
+        print('GRID SEARCH FOR FOLD {}'.format(fold))
+        start_grid = time.time()
+        grid = GridSearchCV(clf, tuned_parameters, cv=3, scoring='f1_macro', n_jobs=1)
+        grid.fit(X_train, y_train)
+        end = time.time()
+        print('GENERAL - Total grid time: {}'.format((end - start_grid)))
+        print('GENERAL - Best score was {} with \n {}'.format(grid.best_score_, grid.best_estimator_))
+
+        estimator = grid.best_estimator_
+        best_param = grid.best_params_
+
+        print('GENERAL - Best param was {}\n'.format(grid.best_params_))
+
         # for each fold we vary weight function, number of co occurrences and the choosing of the classifier
         for specific in configurations['specific_classifier']:
             for weight in configurations['weight']:
                 for cooccurrence in configurations['cooccurrence']:
-                    print(
-                        'Running for specific {}, weight {} and cooccurrence {}'.format(specific, weight, cooccurrence))
+                    print('Running for specific {}, weight {} and cooccurrence {}'.format(specific, weight, cooccurrence))
 
-                    tuned_parameters = choose_tunning_parameters(specific=specific, weight=weight,
-                                                                 coccurrence=cooccurrence)
-
-                    print('GENERAL STARTING')
-                    start_grid = time.time()
-                    grid = GridSearchCV(clf, tuned_parameters, cv=3, scoring='f1_macro', n_jobs=1)
-                    grid.fit(X_train, y_train)
-                    end = time.time()
-                    print('GENERAL - Total grid time: {}'.format((end - start_grid)))
-                    print('GENERAL - Best score was {} with \n {}'.format(grid.best_score_, grid.best_estimator_))
-
-                    grid.best_score_, grid.best_estimator_
+                    # setting the 0 configurations (turn off cooc or weight)
+                    estimator = reset_configurations(estimator, best_param, specific, weight, cooccurrence)
 
                     # Fit the train data
-                    fit(grid.best_estimator_, X_train, y_train, time_dic)
+                    fit(estimator, X_train, y_train, time_dic)
 
                     # Predict
                     y_pred = predict(grid.best_estimator_, X_test, time_dic)
