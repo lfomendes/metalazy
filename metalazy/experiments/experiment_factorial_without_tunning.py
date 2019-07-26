@@ -156,6 +156,7 @@ def main():
                         'micro': f1_score(y_true=y_test, y_pred=y_pred, average='micro'),
                         'config': str(grid.best_estimator_),
                         'best_clf': str(grid.best_estimator_.weaker),
+                        'fold': str(fold),
                     })
 
                     configuration = {'weight': weight, 'specific': specific, 'cooc': cooccurrence}
