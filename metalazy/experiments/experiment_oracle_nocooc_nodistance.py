@@ -32,56 +32,10 @@ def predict(clf, X_test, time_dic):
 
     return y_pred
 
-
-def choose_tunning_parameters(specific, weight, coccurrence):
-    tuned_parameters = [{'n_neighbors': [100]}]
-
-    classifiers = ['logistic', 'nb', 'extrarf']
-    if coccurrence == 1:
-        tuned_parameters[0].update({'number_of_cooccurrences': [10]})
-    if weight == 1:
-        tuned_parameters[0].update({'weight_function': ['cosine', 'inverse', 'dwknn']})
-    if specific == 1:
-        tuned_parameters[0].update({'specific_classifier': classifiers})
-    else:
-        tuned_parameters[0].update({'specific_classifier': random.sample(classifiers, 1)})
-
-    return tuned_parameters
-
-
-def get_best_estimator_for_specific_classifier(X_train,y_train, specific ,n_jobs, grid_size, fold):
-
-    # Create the classifier
-    clf = MetaLazyClassifier( specific_classifier=specific,
-                             select_features=False,
-			                 n_neighbors=200,
-                             n_jobs=n_jobs,
-                             grid_size=grid_size)
-
-    tuned_parameters = {'weight_function': ['cosine', 'inverse', 'dwknn'], 'number_of_cooccurrences': [5, 15]}
-
-    # first we find the best configuration in general
-    print('GRID SEARCH FOR FOLD {}'.format(fold))
-    start_grid = time.time()
-    grid = GridSearchCV(clf, tuned_parameters, cv=3, scoring='f1_macro', n_jobs=1)
-    grid.fit(X_train, y_train)
-    end = time.time()
-    print('GENERAL - Total grid time: {}'.format((end - start_grid)))
-    print('GENERAL - Best score was {} with \n {}'.format(grid.best_score_, grid.best_estimator_))
-
-    estimator = grid.best_estimator_
-    best_param = grid.best_params_
-
-    print('GENERAL - Best param was {}\n'.format(grid.best_params_))
-
-    return estimator
-
-
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('-p', help='path to the directory with  libsvm files')
     parser.add_argument('-o', help='path to the output directory')
-    parser.add_argument('-s', help='if should be hyperparameter search for metalazy')
     parser.add_argument('-j', help='number of jobs to run in parallel. use -1 for all - Default:-1')
     parser.add_argument('-g', help='Size of the sample to the hyperparameter search - Default-5000')
 
@@ -92,8 +46,6 @@ def main():
         os.makedirs(output_path)
 
     path = args.p
-
-    search_params = args.s == 'true'
 
     n_jobs = -1
     if args.j:
@@ -106,7 +58,6 @@ def main():
     dataset_reader = DatasetReader(path)
 
     fold = 0
-    result = []
     times = []
 
     specific_classifier = ['nb','logistic','extrarf']
@@ -121,18 +72,19 @@ def main():
 
         result_df = pd.DataFrame()
 
-        # for each fold we vary weight function, number of co occurrences and the choosing of the classifier
+        # for each fold we vary the specific classifier
         for specific in specific_classifier:
             print('Running for specific {}'.format(specific))
 
             # setting the 0 configurations (turn off cooc or weight)
-            if search_params:
-                estimator = get_best_estimator_for_specific_classifier(X_train, y_train, specific ,n_jobs, grid_size, fold)
-            else:
-                estimator =  MetaLazyClassifier( specific_classifier=specific,
-                             select_features=False,
-                             n_jobs=n_jobs,
-                             grid_size=grid_size)
+            estimator =  MetaLazyClassifier( specific_classifier=specific,
+                         select_features=False,
+                         n_jobs=n_jobs,
+                         number_of_cooccurrences=0,
+                         weight_function='none',
+                         grid_size=grid_size)
+
+            print(estimator)
 
             # Fit the train data
             fit(estimator, X_train, y_train, time_dic)
@@ -149,7 +101,7 @@ def main():
         fold = fold + 1
 
         print(result_df.head(10))
-        result_df.to_csv(output_path + '/result_oracle_fold_{}.csv'.format(fold), index=False)
+        result_df.to_csv(output_path + '/result_oracle_off_fold_{}.csv'.format(fold), index=False)
 
         times_dataframe = pd.DataFrame(data=times)
         print(times_dataframe.head(10))
