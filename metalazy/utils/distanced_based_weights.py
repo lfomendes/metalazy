@@ -63,8 +63,9 @@ class DistanceBasedWeight:
         m = len(weights) * m
         new_weights = np.around((m * weights) / np.sum(weights)).astype(int)
 
-        for index, instance in enumerate(X):
-            toadd = np.concatenate(([X], np.repeat(X[index], new_weights[index], axis=0)))
+        for index in range(0,len(weights)):
+            instance = X[index]
+            toadd = np.concatenate(([X], np.repeat(instance, new_weights[index], axis=0)))
             X = vstack(toadd)
             y = np.concatenate((y, np.repeat(y[index], new_weights[index], axis=0)))
 

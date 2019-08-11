@@ -32,6 +32,20 @@ def predict(clf, X_test, time_dic):
 
     return y_pred
 
+def get_estimator(specific, weight, cooc, oversampling):
+
+    weight_value = 'inverse' if weight == 1 else 'none'
+    cooc_value = 10 if cooc == 1 else 0
+
+    # Create the classifier
+    clf = MetaLazyClassifier(specific_classifier=specific,
+                             select_features=False,
+			                 n_neighbors=200,
+                             weight_function=weight_value,
+                             number_of_cooccurrences=cooc_value,
+                             oversample=oversampling,
+                             n_jobs=3)
+    return clf
 
 def main():
     parser = argparse.ArgumentParser()
@@ -39,6 +53,7 @@ def main():
     parser.add_argument('-o', help='path to the output directory')
     parser.add_argument('-j', help='number of jobs to run in parallel. use -1 for all - Default:-1')
     parser.add_argument('-g', help='Size of the sample to the hyperparameter search - Default-5000')
+    parser.add_argument('-s', help='If should use oversampling or not')
 
     args = parser.parse_args()
 
@@ -47,6 +62,7 @@ def main():
         os.makedirs(output_path)
 
     path = args.p
+    oversampling = args.s == 'true'
 
     n_jobs = -1
     if args.j:
@@ -68,7 +84,7 @@ def main():
     start = time.time()
     while dataset_reader.has_next():
         time_dic = {}
-        print('FOLD {}'.format(fold))
+        print('INITIATING FOLD {}'.format(fold))
 
         # Load the regular data
         X_train, y_train, X_test, y_test = dataset_reader.get_next_fold()
@@ -77,27 +93,24 @@ def main():
 
         # for each fold we vary the specific classifier
         for specific in specific_classifier:
+            for cooc in configurations['cooccurrence']:
+                for weight in configurations['weight']:
+                    print('FOLD {}'.format(fold))
+                    print('Running for specific {} and cooc {} and weight {}'.format(specific, cooc, weight))
 
-            print('Running for specific {}'.format(specific))
+                    # setting the 0 configurations (turn off cooc or weight)
+                    estimator = get_estimator(specific, weight, cooc, oversampling)
 
-            # setting the 0 configurations (turn off cooc or weight)
-            estimator =  MetaLazyClassifier( specific_classifier=specific,
-                         select_features=False,
-                         n_jobs=n_jobs,
-                         number_of_cooccurrences=0,
-                         weight_function='none',
-                         grid_size=grid_size)
+                    print(estimator)
 
-            print(estimator)
+                    # Fit the train data
+                    fit(estimator, X_train, y_train, time_dic)
 
-            # Fit the train data
-            fit(estimator, X_train, y_train, time_dic)
+                    # Predict
+                    y_pred = predict(estimator, X_test, time_dic)
 
-            # Predict
-            y_pred = predict(estimator, X_test, time_dic)
-
-            # Save the result
-            result_df[specific] = y_pred
+                    # Save the result
+                    result_df['{}_{}_{}'.format(specific, weight, cooc)] = y_pred
 
         result_df['y_test'] = y_test
 
@@ -105,7 +118,7 @@ def main():
         fold = fold + 1
 
         print(result_df.head(10))
-        result_df.to_csv(output_path + '/result_oracle_off_fold_{}.csv'.format(fold), index=False)
+        result_df.to_csv(output_path + '/result_fatorial_oracle_fold_{}.csv'.format(fold), index=False)
 
         times_dataframe = pd.DataFrame(data=times)
         print(times_dataframe.head(10))

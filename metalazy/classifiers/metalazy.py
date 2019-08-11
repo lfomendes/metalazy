@@ -39,11 +39,11 @@ class MetaLazyClassifier(BaseEstimator, ClassifierMixin):
         # 'logistic': [{'penalty': ['l2'], 'class_weight': ['balanced'],
         #               'solver': ['liblinear'], 'C': [1.0], 'max_iter': [500]},
         #
-        'extrarf': [{'criterion': ['gini', 'entropy'], 'max_features': ['sqrt', 'log2'],
+        'extrarf': [{'criterion': ['gini'], 'max_features': ['log2'],'class_weight': ['balanced_subsample'],
                      'n_estimators': [200]}],
         'nb': {'alpha': [0.001, 0.01, 0.1, 1, 10, 100]},
-        'logistic': [{'penalty': ['l2'], 'class_weight': ['balanced', None],
-                      'solver': ['liblinear'], 'C': [0.1, 1.0, 10], 'max_iter': [500]},
+        'logistic': [{'penalty': ['l2'], 'class_weight': ['balanced'],
+                      'solver': ['liblinear'], 'C': [10], 'max_iter': [300]},
                      # {'solver': ['lbfgs'], 'C': [1, 10, 0.1, 0.01],
                      #  'class_weight': ['balanced', None],
                      #  'multi_class': ['ovr', 'multinomial']}
@@ -52,7 +52,7 @@ class MetaLazyClassifier(BaseEstimator, ClassifierMixin):
 
     def __init__(self, specific_classifier=None, n_jobs=-1, n_neighbors=200, metric='cosine',
                  grid_size=1000, weight_function='inverse', number_of_cooccurrences=10, select_features=False,
-                 random_state=42):
+                 oversample=False, random_state=42):
         """
         TODO
         """
@@ -61,6 +61,7 @@ class MetaLazyClassifier(BaseEstimator, ClassifierMixin):
         self.weight_function = weight_function
         self.select_features = select_features
         self.number_of_cooccurrences = number_of_cooccurrences
+        self.oversample = oversample
 
         # everyone's params
         self.n_jobs = mp.cpu_count() if n_jobs == -1 else n_jobs
@@ -235,10 +236,11 @@ class MetaLazyClassifier(BaseEstimator, ClassifierMixin):
             # Filter the X_train with the neighbours
             X_t = self.X_train[ids].copy()
             instance = X[[instance_id]].copy()
+            y_t = self.y_train[ids]
 
             # Select features
             if self.select_features:
-                X_t, instance = self.lazy_feature_selection(X_t, self.y_train[ids], X[instance_id])
+                X_t, instance = self.lazy_feature_selection(X_t, y_t, X[instance_id])
 
             # Create a specific classifier for this instance
             weaker_aux = clone(self.weaker)
@@ -254,7 +256,12 @@ class MetaLazyClassifier(BaseEstimator, ClassifierMixin):
             # only fit the classifier if there is more than 1 class on the neighbourhood
             if len(np.unique(self.y_train[ids])) > 1:
                 # fit the classifier
-                weaker_aux.fit(X_t, self.y_train[ids], weights)
+                if self.oversample:
+                    # Trying the oversample
+                    X_t, y_t = DistanceBasedWeight.oversample(X_t, y_t, weights=weights, m=2)
+                    weaker_aux.fit(X_t, y_t)
+                else:
+                    weaker_aux.fit(X_t, y_t, weights)
                 pred[i, np.searchsorted(self.classes_, weaker_aux.classes_)] = weaker_aux.predict_proba(instance)[0]
             else:
                 pred[i] = np.zeros((1, self.n_classes_))
