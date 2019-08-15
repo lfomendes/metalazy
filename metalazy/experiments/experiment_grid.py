@@ -71,6 +71,7 @@ def main():
     while dataset_reader.has_next():
         time_dic = {}
         print('FOLD {}'.format(fold))
+        start_fold = time.time()
 
         # Load the regular data
         X_train, y_train, X_test, y_test = dataset_reader.get_next_fold()
@@ -85,9 +86,9 @@ def main():
         #                      'n_neighbors': [200, 50], 'number_of_cooccurrences': [1, 10]}]
 
         #tuned_parameters = [{'specific_classifier': ['nb', 'logistic', 'extrarf'],
-        tuned_parameters = [{'specific_classifier': ['logistic'],
-                             'weight_function': ['none', 'cosine', 'inverse'],
-                              'n_neighbors': [100, 50], 'number_of_cooccurrences': [0, 5, 10]}]
+        tuned_parameters = [{'specific_classifier': ['nb', 'logistic', 'extrarf'],
+                             'weight_function': ['cosine', 'inverse'],
+                              'n_neighbors': [100], 'number_of_cooccurrences': [10]}]
 
         print('GENERAL STARTING')
         start_grid = time.time()
@@ -119,6 +120,11 @@ def main():
         print('Micro: {}'.format(f1_score(y_true=y_test, y_pred=y_pred, average='micro')))
         times.append(time_dic)
         fold = fold + 1
+        end_fold = time.time()
+        print('Total fold time: {}'.format((end_fold - start_fold)))
+        print('train size {}'.format(X_train.shape))
+        print('test size {}'.format(X_test.shape))
+        print()
 
     print(result)
 
