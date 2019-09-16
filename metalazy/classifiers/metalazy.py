@@ -313,6 +313,8 @@ class MetaLazyClassifier(BaseEstimator, ClassifierMixin):
         :param y:
         :return:
         '''
+        if type(X) is np.ndarray:
+            X = sparse.csr_matrix(X)
         pred = self.predict_proba(X)
         #print(pred.shape)
         return self.classes_.take(np.argmax(pred, axis=1), axis=0)
