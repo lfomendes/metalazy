@@ -2,6 +2,7 @@ from metalazy.utils.dataset_reader import DatasetReader
 from metalazy.classifiers.metalazy import MetaLazyClassifier
 from sklearn.metrics import classification_report
 from sklearn.naive_bayes import MultinomialNB
+from sklearn.ensemble import RandomForestClassifier, ExtraTreesClassifier
 from sklearn.model_selection import GridSearchCV
 from sklearn.metrics import f1_score
 import pandas as pd
@@ -81,14 +82,21 @@ def main():
                                  n_jobs=n_jobs,
                                  grid_size=grid_size)
 
+        clf = ExtraTreesClassifier(n_jobs=-1)
+
+
         # tuned_parameters = [{'specific_classifier': ['nb'],
         #                      'weight_function': ['none', 'cosine', 'inverse'],
         #                      'n_neighbors': [200, 50], 'number_of_cooccurrences': [1, 10]}]
 
         #tuned_parameters = [{'specific_classifier': ['nb', 'logistic', 'extrarf'],
         tuned_parameters = [{'specific_classifier': ['nb', 'logistic', 'extrarf'],
-                             'weight_function': ['cosine', 'inverse'],
+                             'weight_function': ['inverse'],
                               'n_neighbors': [100], 'number_of_cooccurrences': [10]}]
+
+        tuned_parameters = [{'criterion': ['gini', 'entropy'], 'max_features': ['log2','sqrt'],'class_weight': ['balanced', 'None'],
+                     'n_estimators': [100, 200]}]
+
 
         print('GENERAL STARTING')
         start_grid = time.time()

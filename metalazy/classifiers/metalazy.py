@@ -39,7 +39,7 @@ class MetaLazyClassifier(BaseEstimator, ClassifierMixin):
         # 'logistic': [{'penalty': ['l2'], 'class_weight': ['balanced'],
         #               'solver': ['liblinear'], 'C': [1.0], 'max_iter': [500]},
         #
-        'extrarf': [{'criterion': ['gini'], 'max_features': ['log2'],'class_weight': ['balanced_subsample'],
+        'extrarf': [{'criterion': ['gini'], 'max_features': ['log2'],'class_weight': ['balanced'],
                      'n_estimators': [200]}],
         'nb': {'alpha': [0.001, 0.01, 0.1, 1, 10, 100]},
         'logistic': [{'penalty': ['l2'], 'class_weight': ['balanced'],
@@ -195,7 +195,10 @@ class MetaLazyClassifier(BaseEstimator, ClassifierMixin):
 
         if self.specific_classifier:
             # choose the weaker classifier
-            best_score, self.weaker = self.avaliate_weaker(self.specific_classifier, self.X_train, self.y_train, score='f1_macro')
+            print('Weaker Parameter')
+            #best_score, self.weaker = self.avaliate_weaker(self.specific_classifier, self.X_train, self.y_train, score='f1_macro')
+            self.weaker = self.set_classifier(self.specific_classifier)
+            print('found')
         else:
             # test which classifier is the best for this specific dataset
             self.find_best_weaker_classifier(X, y)
@@ -295,6 +298,7 @@ class MetaLazyClassifier(BaseEstimator, ClassifierMixin):
         for batch in range(0, self.n_jobs):
             args.append((batch, self.n_jobs, idx, dists, X))
 
+        print('predicting parallel')
         # Calling one proccess for each batch
         with mp.Pool(processes=self.n_jobs) as pool:
             results = pool.starmap(self.predict_parallel, args)
