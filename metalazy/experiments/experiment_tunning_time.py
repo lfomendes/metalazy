@@ -56,21 +56,6 @@ def choose_tunning_parameters(specific, weight, coccurrence):
 
 import copy
 
-def reset_configurations(clf, grid_param, specific, weight, coccurrence):
-    param_dict = copy.deepcopy(grid_param)
-    classifiers = ['logistic', 'nb', 'extrarf']
-    print(param_dict)
-    if coccurrence == 0:
-        param_dict.update({'number_of_cooccurrences': 0})
-    if weight == 0:
-        param_dict.update({'weight_function': 'none'})
-    if specific == 0:
-        param_dict.update({'specific_classifier': random.sample(classifiers, 1)[0]})
-    clf.set_params(**param_dict)
-    print(clf.get_params())
-    return clf
-
-
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('-p', help='path to the directory with  libsvm files')
@@ -99,10 +84,6 @@ def main():
     fold = 0
     result = []
     times = []
-
-    configurations = {'specific_classifier': [0, 1],
-                      'weight': [0, 1],
-                      'cooccurrence': [0, 1]}
 
     start = time.time()
     while dataset_reader.has_next():
@@ -133,35 +114,22 @@ def main():
 
         print('GENERAL - Best param was {}\n'.format(grid.best_params_))
 
-        # for each fold we vary weight function, number of co occurrences and the choosing of the classifier
-        for specific in configurations['specific_classifier']:
-            for weight in configurations['weight']:
-                for cooccurrence in configurations['cooccurrence']:
-                    print('Running for specific {}, weight {} and cooccurrence {}'.format(specific, weight, cooccurrence))
+        # Fit the train data
+        fit(estimator, X_train, y_train, time_dic)
 
-                    # setting the 0 configurations (turn off cooc or weight)
-                    estimator = reset_configurations(estimator, best_param, specific, weight, cooccurrence)
+        # Predict
+        y_pred = predict(grid.best_estimator_, X_test, time_dic)
 
-                    # Fit the train data
-                    fit(estimator, X_train, y_train, time_dic)
-
-                    # Predict
-                    y_pred = predict(grid.best_estimator_, X_test, time_dic)
-
-                    print(str(grid.best_estimator_))
-                    print(str(grid.best_estimator_.weaker))
-                    # Save the result
-                    result.append({
-                        'macro': f1_score(y_true=y_test, y_pred=y_pred, average='macro'),
-                        'micro': f1_score(y_true=y_test, y_pred=y_pred, average='micro'),
-                        'config': str(grid.best_estimator_),
-                        'best_clf': str(grid.best_estimator_.weaker),
-                        'fold': str(fold),
-                    })
-
-                    configuration = {'weight': weight, 'specific': specific, 'cooc': cooccurrence}
-
-                    result[-1].update(configuration)
+        print(str(grid.best_estimator_))
+        print(str(grid.best_estimator_.weaker))
+        # Save the result
+        result.append({
+            'macro': f1_score(y_true=y_test, y_pred=y_pred, average='macro'),
+            'micro': f1_score(y_true=y_test, y_pred=y_pred, average='micro'),
+            'config': str(grid.best_estimator_),
+            'best_clf': str(grid.best_estimator_.weaker),
+            'fold': str(fold),
+        })
 
         print('Macro: {}'.format(f1_score(y_true=y_test, y_pred=y_pred, average='macro')))
         print('Micro: {}'.format(f1_score(y_true=y_test, y_pred=y_pred, average='micro')))
@@ -170,7 +138,7 @@ def main():
 
         result_dataframe = pd.DataFrame(data=result)
         print(result_dataframe.head(10))
-        result_dataframe.to_csv(output_path + '/result_factorial.csv', index=False)
+        result_dataframe.to_csv(output_path + '/result_tunning_time.csv', index=False)
 
         times_dataframe = pd.DataFrame(data=times)
         print(times_dataframe.head(10))
@@ -183,7 +151,7 @@ def main():
 
     result_dataframe = pd.DataFrame(data=result)
     print(result_dataframe.head(10))
-    result_dataframe.to_csv(output_path + '/result_factorial.csv', index=False)
+    result_dataframe.to_csv(output_path + '/result_tunning_time.csv', index=False)
 
     times_dataframe = pd.DataFrame(data=times)
     print(times_dataframe.head(10))
