@@ -23,6 +23,8 @@ class DatasetReader:
             [filename for filename in os.listdir(self.folds_path) if filename.startswith("test")])
 
     def _load_dataset_from_folds(self, train_file, test_file):
+        print(train_file)
+        print(test_file)
         result = load_svmlight_files([train_file, test_file])
         X_train = result[0]
         y_train = result[1]

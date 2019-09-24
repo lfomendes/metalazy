@@ -28,7 +28,7 @@ class MetaLazyClassifier(BaseEstimator, ClassifierMixin):
 
     # Classifiers to test for each dataset
     possible_weakers = ['nb', 'logistic', 'extrarf']
-    #possible_weakers = ['nb']
+    # possible_weakers = ['nb']
 
     # The grid params for each weaker classifier
     weaker_grid_params = {
@@ -39,7 +39,7 @@ class MetaLazyClassifier(BaseEstimator, ClassifierMixin):
         # 'logistic': [{'penalty': ['l2'], 'class_weight': ['balanced'],
         #               'solver': ['liblinear'], 'C': [1.0], 'max_iter': [500]},
         #
-        'extrarf': [{'criterion': ['gini'], 'max_features': ['log2'],'class_weight': ['balanced'],
+        'extrarf': [{'criterion': ['gini'], 'max_features': ['log2'], 'class_weight': ['balanced'],
                      'n_estimators': [200]}],
         'nb': {'alpha': [0.001, 0.01, 0.1, 1, 10, 100]},
         'logistic': [{'penalty': ['l2'], 'class_weight': ['balanced'],
@@ -92,16 +92,16 @@ class MetaLazyClassifier(BaseEstimator, ClassifierMixin):
         clf = None
 
         if name == 'rf':
-            print('rf')
+            # print('rf')
             clf = RandomForestClassifier(random_state=self.random_state, n_jobs=specif_jobs)
         elif name == 'nb':
-            print('nb')
+            # print('nb')
             clf = MultinomialNB()
         elif name == 'extrarf':
-            print('extrarf')
+            # print('extrarf')
             clf = ExtraTreesClassifier(random_state=self.random_state, n_jobs=specif_jobs)
         elif name == 'logistic':
-            print('logistic')
+            # print('logistic')
             clf = LogisticRegression(random_state=self.random_state, n_jobs=specif_jobs)
         else:
             raise Exception('The specific_classifier {} is not valid, use rf, nb, extrarf or logistic'.format(
@@ -157,7 +157,7 @@ class MetaLazyClassifier(BaseEstimator, ClassifierMixin):
         X_train_filtered = X_train[inds]
         y_train_filtered = y_train[inds]
 
-        #print('Starting parallel process: {}'.format(self.n_jobs))
+        # print('Starting parallel process: {}'.format(self.n_jobs))
         # Creating arguments to parallel evaluation
         args = []
         results = []
@@ -170,18 +170,19 @@ class MetaLazyClassifier(BaseEstimator, ClassifierMixin):
             value = result[0]
             estimator = result[1]
 
-            #print('Score: {}'.format(value))
+            # print('Score: {}'.format(value))
             if value > best_score:
                 best_score = value
                 best_clf = estimator
 
-        #print('Best Classifier: {}\n\n'.format(best_clf))
+        # print('Best Classifier: {}\n\n'.format(best_clf))
         self.weaker = best_clf
 
     def fit(self, X, y=None):
         """
         TODO
         """
+        start = time.time()
         self.classes_ = np.unique(y)
         self.n_classes_ = len(self.classes_)
 
@@ -192,17 +193,21 @@ class MetaLazyClassifier(BaseEstimator, ClassifierMixin):
         self.kNN = NearestNeighbors(n_jobs=self.n_jobs, n_neighbors=self.n_neighbors, algorithm='brute',
                                     metric=self.metric)
         self.kNN.fit(self.X_train, self.y_train)
+        end = time.time()
+        print('METALAZY - KNN fit: {}'.format((end - start)))
 
+        start = time.time()
         if self.specific_classifier:
             # choose the weaker classifier
-            #print('Weaker Parameter')
-            #best_score, self.weaker = self.avaliate_weaker(self.specific_classifier, self.X_train, self.y_train, score='f1_macro')
+            # print('Weaker Parameter')
+            # best_score, self.weaker = self.avaliate_weaker(self.specific_classifier, self.X_train, self.y_train, score='f1_macro')
             self.weaker = self.set_classifier(self.specific_classifier)
-            #print('found')
+            # print('found')
         else:
             # test which classifier is the best for this specific dataset
             self.find_best_weaker_classifier(X, y)
-
+        end = time.time()
+        print('METALAZY - Choose weaker fit: {}'.format((end - start)))
         return self
 
     def lazy_feature_selection(self, X, y, instance):
@@ -230,9 +235,15 @@ class MetaLazyClassifier(BaseEstimator, ClassifierMixin):
 
         pred = np.zeros(((until - batch * batch_size), self.n_classes_))
 
+        time_sum_clone = 0.0
+        time_sum_cooc = 0.0
+        time_sum_weight = 0.0
+        time_sum_pred = 0.0
+
         # for each one of these instances
         for i, ids in enumerate(idx_filtered):
 
+            start = time.time()
             # Getting the id inside the X_test
             instance_id = i + from_id
 
@@ -248,14 +259,25 @@ class MetaLazyClassifier(BaseEstimator, ClassifierMixin):
             # Create a specific classifier for this instance
             weaker_aux = clone(self.weaker)
 
+            end = time.time()
+            time_sum_clone = time_sum_clone + (end - start)
+
+            start = time.time()
             # Create co-occorrence features
             X_t, instance = Cooccurrence.cooccurrence(X_t, instance,
                                                       number_of_cooccurrences=self.number_of_cooccurrences,
                                                       seed_value=42)
+            end = time.time()
+            time_sum_cooc = time_sum_cooc + (end - start)
+
+            start = time.time()
             # Find weights
             weights = DistanceBasedWeight.define_weight(self.weight_function, self.y_train,
                                                         dists[instance_id], ids)
+            end = time.time()
+            time_sum_weight = time_sum_weight + (end - start)
 
+            start = time.time()
             # only fit the classifier if there is more than 1 class on the neighbourhood
             if len(np.unique(self.y_train[ids])) > 1:
                 # fit the classifier
@@ -269,6 +291,16 @@ class MetaLazyClassifier(BaseEstimator, ClassifierMixin):
             else:
                 pred[i] = np.zeros((1, self.n_classes_))
                 pred[i][int(self.y_train[ids][0])] = 1.0
+
+            end = time.time()
+            time_sum_pred = time_sum_pred + (end - start)
+
+        total_time = time_sum_pred + time_sum_weight + time_sum_cooc + time_sum_clone
+        print('INTERNAL TIME copy: {} - {}%'.format(time_sum_clone, int((100*time_sum_clone)/total_time)))
+        print('INTERNAL TIME cooc: {} - {}%'.format(time_sum_cooc, int((100*time_sum_cooc)/total_time)))
+        print('INTERNAL TIME weight: {} - {}%'.format(time_sum_weight,int((100*time_sum_weight)/total_time)))
+        print('INTERNAL TIME pred: {} - {}%'.format(time_sum_pred,int((100*time_sum_pred)/total_time)))
+        print('INTERNAL TIME total: {} - {} - cooc {}\n'.format(total_time, self.weaker, self.number_of_cooccurrences))
 
         return pred
 
@@ -291,18 +323,24 @@ class MetaLazyClassifier(BaseEstimator, ClassifierMixin):
 
         # get knn for all test sample
         # TODO use fastKNN
+        start = time.time()
         dists, idx = self.kNN.kneighbors(X, return_distance=True)
+        end = time.time()
+        print('METALAZY - KNN neighbours: {}'.format((end - start)))
 
         # Creating arguments to parallel evaluation
         args = []
         for batch in range(0, self.n_jobs):
             args.append((batch, self.n_jobs, idx, dists, X))
 
-        #print('predicting parallel')
+        start = time.time()
+        # print('predicting parallel')
         # Calling one proccess for each batch
         with mp.Pool(processes=self.n_jobs) as pool:
             results = pool.starmap(self.predict_parallel, args)
         pred = np.concatenate(results, axis=0)
+        end = time.time()
+        print('METALAZY - pred paralel: {} - {}'.format((end - start), self.weaker))
 
         return pred
 
@@ -316,5 +354,5 @@ class MetaLazyClassifier(BaseEstimator, ClassifierMixin):
         if type(X) is np.ndarray:
             X = sparse.csr_matrix(X)
         pred = self.predict_proba(X)
-        #print(pred.shape)
+        # print(pred.shape)
         return self.classes_.take(np.argmax(pred, axis=1), axis=0)

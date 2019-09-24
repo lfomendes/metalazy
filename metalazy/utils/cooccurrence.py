@@ -1,6 +1,7 @@
-from random import *
-from scipy import sparse
+import random as rd
 import numpy as np
+from scipy import sparse
+import time
 
 
 class Cooccurrence:
@@ -10,11 +11,11 @@ class Cooccurrence:
 
     def get_pairs_replacement(data, indices, n=2, number_of_cooccurrences=10):
 
-        probabilities = np.copy(data)
+        #probabilities = np.copy(data)
 
         # get the probabilities based on data
         total = np.sum(data)
-        probabilities = probabilities / total
+        probabilities = data / total
 
         pairs = []
         # for i in range(0,int(len(indices) / 2)):
@@ -34,7 +35,7 @@ class Cooccurrence:
         choices = []
         # choose randomly but based on tfidf
         for value, indice in zip(values, indices):
-            if random() < value:
+            if rd.random() < value:
                 choices.append(indice)
         # get pairs
         choices = np.array(choices)
@@ -55,30 +56,32 @@ class Cooccurrence:
         if feature_number < 2 or number_of_cooccurrences < 1:
             return X_train, instance
 
+        start = time.time()
         indices = Cooccurrence.get_pairs_replacement(instance.data, instance.indices)
+        end = time.time()
+        #print('lala:{}'.format((end-start)*100))
 
+        start = time.time()
         cols = [X_train]
         cols_test = [instance]
         for combination_i in range(0, len(indices)):
-            # for each matrix we create a new column
-            new_col_train = None
-            new_col_test = None
-            for i in indices[combination_i]:
-                if new_col_train is not None:
-                    new_col_train = new_col_train.multiply(X_train.getcol(i))
-                    new_col_test = new_col_test.multiply(instance.getcol(i))
-                else:
-                    new_col_train = X_train.getcol(i)
-                    new_col_test = instance.getcol(i)
-            new_col_train = new_col_train > 0
-            new_col_test = new_col_test > 0
+            features_to_combine = X_train[:, indices[combination_i]].toarray()
+            idx_has_all_words = np.logical_and.reduce(features_to_combine, axis=1)[np.newaxis].T
+            col = features_to_combine.mean(axis=1)[np.newaxis].T
+            col *= idx_has_all_words
 
-            col = sparse.csr_matrix(X_train[:, indices[combination_i]].mean(axis=1)).multiply(new_col_train)
-            col_test = sparse.csr_matrix(instance[:, indices[combination_i]].mean(axis=1)).multiply(new_col_test)
+            col_test = sparse.csr_matrix(instance[:, indices[combination_i]].mean(axis=1))
             cols.append(col)
             cols_test.append(col_test)
 
+        end = time.time()
+        #print('lele:{}'.format((end-start)*100))
+
+        start = time.time()
         X_train = sparse.hstack(cols, format='csr')
         instance = sparse.hstack(cols_test, format='csr')
+        end = time.time()
+        #print('lili:{}'.format((end-start)*100))
+        #print()
 
         return X_train, instance

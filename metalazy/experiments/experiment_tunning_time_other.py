@@ -4,6 +4,7 @@ from sklearn.metrics import classification_report
 from sklearn.naive_bayes import MultinomialNB
 from sklearn.model_selection import GridSearchCV
 from sklearn.metrics import f1_score
+from sklearn.svm import SVC
 import pandas as pd
 import numpy as np
 import argparse
@@ -94,13 +95,12 @@ def main():
         X_train, y_train, X_test, y_test = dataset_reader.get_next_fold()
 
         # Create the classifier
-        clf = MetaLazyClassifier(select_features=False,
-                                 n_jobs=n_jobs,
-                                 grid_size=grid_size)
+        clf = SVC()
 
-        tuned_parameters = choose_tunning_parameters(specific=1, weight=1,coccurrence=1)
-
-        print(tuned_parameters)
+        # Set the parameters by cross-validation
+        tuned_parameters = [{'kernel': ['rbf'], 'gamma': [1e-3, 1e-4],
+                             'C': [1, 10, 100, 1000]},
+                            {'kernel': ['linear'], 'C': [1, 10, 100, 1000]}]
 
         # first we find the best configuration in general
         print('GRID SEARCH FOR FOLD {}'.format(fold))
@@ -123,13 +123,12 @@ def main():
         y_pred = predict(grid.best_estimator_, X_test, time_dic)
 
         print(str(grid.best_estimator_))
-        print(str(grid.best_estimator_.weaker))
         # Save the result
         result.append({
             'macro': f1_score(y_true=y_test, y_pred=y_pred, average='macro'),
             'micro': f1_score(y_true=y_test, y_pred=y_pred, average='micro'),
             'config': str(grid.best_estimator_),
-            'best_clf': str(grid.best_estimator_.weaker),
+            #'best_clf': str(grid.best_estimator_.weaker),
             'fold': str(fold),
         })
 
