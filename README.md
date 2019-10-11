@@ -20,4 +20,4 @@ Install the requirements
 
 Run the metalazy example to check if everything went okay
 
-> Blockquote
+> python metalazy/example/metalazy_example.py
