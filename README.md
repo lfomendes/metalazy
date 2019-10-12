@@ -35,6 +35,7 @@ The class DatasetReader makes it easy to iterate over each fold, you just have t
 > dataset_reader = DatasetReader(path)
 > 
 > while dataset_reader.has_next():
+>
 >        print('FOLD {}'.format(fold))
 >
 >        # Load the regular data
