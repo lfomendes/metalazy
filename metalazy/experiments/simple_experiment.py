@@ -9,11 +9,9 @@ import time
 def main():
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('-d', type=str, help='dataset name')
     parser.add_argument('-p', help='path to thedirectory with  libsvm files')
 
     args = parser.parse_args()
-    dataset = args.d
     path = args.p
 
     dataset_reader = DatasetReader(path)
@@ -39,6 +37,7 @@ def main():
 
         fold = fold + 1
 
+    print('\n\n ---------\n EXPERIMENT RESULT \n ---------')
     print(result)
     for N in ['25', '200']:
         print('{}: {}'.format(N,np.mean(np.array(result[N]))))
