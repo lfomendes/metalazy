@@ -1,0 +1,4 @@
+Theses files are from the sentiment dataset with tweets collected from stanford.
+They are already separated in train and test folders
+
+TFIDF with normalization and removing stopwords
