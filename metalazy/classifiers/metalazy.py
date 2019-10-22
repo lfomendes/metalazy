@@ -13,7 +13,7 @@ from sklearn.ensemble import RandomForestClassifier, ExtraTreesClassifier
 from sklearn.neighbors import NearestNeighbors
 from metalazy.utils.distanced_based_weights import DistanceBasedWeight
 from metalazy.utils.cooccurrence import Cooccurrence
-from sklearn.feature_selection import SelectPercentile, chi2
+import json
 import multiprocessing as mp
 
 
@@ -52,7 +52,7 @@ class MetaLazyClassifier(BaseEstimator, ClassifierMixin):
 
     def __init__(self, specific_classifier=None, n_jobs=-1, n_neighbors=200, metric='cosine',
                  grid_size=1000, weight_function='inverse', number_of_cooccurrences=10, select_features=False,
-                 oversample=False, random_state=42):
+                 oversample=False, random_state=42, log_time_file=None):
         """
         TODO
         """
@@ -62,6 +62,10 @@ class MetaLazyClassifier(BaseEstimator, ClassifierMixin):
         self.select_features = select_features
         self.number_of_cooccurrences = number_of_cooccurrences
         self.oversample = oversample
+
+        # file into which save the time for each part
+        self.log_time_file = log_time_file
+        self.times = []
 
         # everyone's params
         self.n_jobs = mp.cpu_count() if n_jobs == -1 else n_jobs
@@ -180,21 +184,21 @@ class MetaLazyClassifier(BaseEstimator, ClassifierMixin):
 
     def fit(self, X, y=None):
         """
-        TODO
+        Fit function.
+        It fits an internal KNN classifier and it chooses or sets the weaker classifier to be used
         """
-        start = time.time()
         self.classes_ = np.unique(y)
         self.n_classes_ = len(self.classes_)
 
         self.X_train = sparse.csr_matrix(X)
         self.y_train = np.array(y)
 
+        self.times = []
+
         # Fit the kNN classifier
         self.kNN = NearestNeighbors(n_jobs=self.n_jobs, n_neighbors=self.n_neighbors, algorithm='brute',
                                     metric=self.metric)
         self.kNN.fit(self.X_train, self.y_train)
-        end = time.time()
-        print('METALAZY - KNN fit: {}'.format((end - start)))
 
         start = time.time()
         if self.specific_classifier:
@@ -207,43 +211,37 @@ class MetaLazyClassifier(BaseEstimator, ClassifierMixin):
             # test which classifier is the best for this specific dataset
             self.find_best_weaker_classifier(X, y)
         end = time.time()
-        print('METALAZY - Choose weaker fit: {}'.format((end - start)))
+
+        if self.log_time_file:
+            print('METALAZY - Choose weaker fit: {}'.format((end - start)))
+
         return self
-
-    def lazy_feature_selection(self, X, y, instance):
-        selector = SelectPercentile(chi2, percentile=25).fit(X, y)
-        new_X_train = selector.transform(X)
-        instance_comb = selector.transform(instance)
-
-        return new_X_train, instance_comb
 
     # TODO se coloca o X no self é melhor em termos de memoria?
     def predict_parallel(self, batch, number_of_batches, idx, dists, X):
 
-        # Defining which instances this function will proccess
+        # Defining which instances this function will process
         max_size = idx.shape[0]
         batch_size = int(max_size / float(number_of_batches))
         from_id = batch * batch_size
         until = ((batch + 1) * batch_size) if ((batch + 1) * batch_size) < max_size else max_size
         if (int(number_of_batches) - 1) == int(batch):
             until = max_size
-        # print('number of batches {} batch {} max {} - from {} until {}'.format(batch_size, batch, max_size, from_id,
-        #                                                                      until))
 
         # filtered ids
         idx_filtered = idx[from_id:until]
 
+        # starts the pred result with 0s
         pred = np.zeros(((until - batch * batch_size), self.n_classes_))
 
-        time_sum_clone = 0.0
-        time_sum_cooc = 0.0
-        time_sum_weight = 0.0
-        time_sum_pred = 0.0
+        if self.log_time_file:
+            time_sum_cooc = []
+            time_sum_weight = []
+            time_sum_pred = []
 
         # for each one of these instances
         for i, ids in enumerate(idx_filtered):
 
-            start = time.time()
             # Getting the id inside the X_test
             instance_id = i + from_id
 
@@ -252,15 +250,8 @@ class MetaLazyClassifier(BaseEstimator, ClassifierMixin):
             instance = X[[instance_id]].copy()
             y_t = self.y_train[ids]
 
-            # Select features
-            if self.select_features:
-                X_t, instance = self.lazy_feature_selection(X_t, y_t, X[instance_id])
-
             # Create a specific classifier for this instance
             weaker_aux = clone(self.weaker)
-
-            end = time.time()
-            time_sum_clone = time_sum_clone + (end - start)
 
             start = time.time()
             # Create co-occorrence features
@@ -268,22 +259,24 @@ class MetaLazyClassifier(BaseEstimator, ClassifierMixin):
                                                       number_of_cooccurrences=self.number_of_cooccurrences,
                                                       seed_value=42)
             end = time.time()
-            time_sum_cooc = time_sum_cooc + (end - start)
+            if self.log_time_file: time_sum_cooc.append(end - start)
 
             start = time.time()
             # Find weights
             weights = DistanceBasedWeight.define_weight(self.weight_function, self.y_train,
                                                         dists[instance_id], ids)
+            if self.oversample:
+                # Trying the oversample
+                X_t, y_t = DistanceBasedWeight.oversample(X_t, y_t, weights=weights, m=2)
             end = time.time()
-            time_sum_weight = time_sum_weight + (end - start)
+
+            if self.log_time_file: time_sum_weight.append(end - start)
 
             start = time.time()
             # only fit the classifier if there is more than 1 class on the neighbourhood
             if len(np.unique(self.y_train[ids])) > 1:
                 # fit the classifier
                 if self.oversample:
-                    # Trying the oversample
-                    X_t, y_t = DistanceBasedWeight.oversample(X_t, y_t, weights=weights, m=2)
                     weaker_aux.fit(X_t, y_t)
                 else:
                     weaker_aux.fit(X_t, y_t, weights)
@@ -293,16 +286,16 @@ class MetaLazyClassifier(BaseEstimator, ClassifierMixin):
                 pred[i][int(self.y_train[ids][0])] = 1.0
 
             end = time.time()
-            time_sum_pred = time_sum_pred + (end - start)
+            if self.log_time_file: time_sum_pred.append(end - start)
 
-        total_time = time_sum_pred + time_sum_weight + time_sum_cooc + time_sum_clone
-        print('INTERNAL TIME copy: {} - {}%'.format(time_sum_clone, int((100*time_sum_clone)/total_time)))
-        print('INTERNAL TIME cooc: {} - {}%'.format(time_sum_cooc, int((100*time_sum_cooc)/total_time)))
-        print('INTERNAL TIME weight: {} - {}%'.format(time_sum_weight,int((100*time_sum_weight)/total_time)))
-        print('INTERNAL TIME pred: {} - {}%'.format(time_sum_pred,int((100*time_sum_pred)/total_time)))
-        print('INTERNAL TIME total: {} - {} - cooc {}\n'.format(total_time, self.weaker, self.number_of_cooccurrences))
+        times = {}
+        if self.log_time_file:
+            # append to file all times
+            times = {'size': (until - from_id), 'time_sum_cooc': time_sum_cooc, 'time_sum_weight': time_sum_weight,
+                     'time_sum_pred': time_sum_pred}
+            print(times)
 
-        return pred
+        return {'pred':pred, 'times':times}
 
     def predict_proba(self, X):
 
@@ -326,7 +319,9 @@ class MetaLazyClassifier(BaseEstimator, ClassifierMixin):
         start = time.time()
         dists, idx = self.kNN.kneighbors(X, return_distance=True)
         end = time.time()
-        print('METALAZY - KNN neighbours: {}'.format((end - start)))
+
+        if self.log_time_file:
+            self.times.append({'knn': (end - start), 'size': len(dists)})
 
         # Creating arguments to parallel evaluation
         args = []
@@ -334,13 +329,20 @@ class MetaLazyClassifier(BaseEstimator, ClassifierMixin):
             args.append((batch, self.n_jobs, idx, dists, X))
 
         start = time.time()
-        # print('predicting parallel')
+        results = []
+        times_n = []
         # Calling one proccess for each batch
         with mp.Pool(processes=self.n_jobs) as pool:
-            results = pool.starmap(self.predict_parallel, args)
+            results_times = pool.starmap(self.predict_parallel, args)
+        for item in results_times:
+            results.append(item['pred'])
+            times_n.append(item['times'])
+        print('\n\n')
         pred = np.concatenate(results, axis=0)
         end = time.time()
-        print('METALAZY - pred paralel: {} - {}'.format((end - start), self.weaker))
+
+        if self.log_time_file:
+            self.times.append({'total_pred': (end - start), 'size': len(dists), 'proccess':times_n})
 
         return pred
 
@@ -356,3 +358,13 @@ class MetaLazyClassifier(BaseEstimator, ClassifierMixin):
         pred = self.predict_proba(X)
         # print(pred.shape)
         return self.classes_.take(np.argmax(pred, axis=1), axis=0)
+
+    def flush_log_time_file(self):
+        '''
+        Write the times reported to a file
+        :return:
+        '''
+        print(self.log_time_file)
+        print(self.times)
+        with open(self.log_time_file, 'a') as fout:
+            json.dump(self.times, fout)

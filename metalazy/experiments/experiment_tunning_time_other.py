@@ -5,6 +5,7 @@ from sklearn.naive_bayes import MultinomialNB
 from sklearn.model_selection import GridSearchCV
 from sklearn.metrics import f1_score
 from sklearn.svm import SVC
+from sklearn.naive_bayes import MultinomialNB
 import pandas as pd
 import numpy as np
 import argparse
@@ -63,6 +64,7 @@ def main():
     parser.add_argument('-o', help='path to the output directory')
     parser.add_argument('-j', help='number of jobs to run in parallel. use -1 for all - Default:-1')
     parser.add_argument('-g', help='Size of the sample to the hyperparameter search - Default-5000')
+    parser.add_argument('-c', help='Which classifier to user (svc, nb)')
 
     args = parser.parse_args()
 
@@ -71,6 +73,7 @@ def main():
         os.makedirs(output_path)
 
     path = args.p
+    clf = args.c
 
     n_jobs = -1
     if args.j:
@@ -95,12 +98,15 @@ def main():
         X_train, y_train, X_test, y_test = dataset_reader.get_next_fold()
 
         # Create the classifier
-        clf = SVC()
-
-        # Set the parameters by cross-validation
-        tuned_parameters = [{'kernel': ['rbf'], 'gamma': [1e-3, 1e-4],
-                             'C': [1, 10, 100, 1000]},
-                            {'kernel': ['linear'], 'C': [1, 10, 100, 1000]}]
+        if clf == 'svc':
+            clf = SVC()
+            # Set the parameters by cross-validation
+            tuned_parameters = [{'kernel': ['rbf'], 'gamma': [1e-3, 1e-4],
+                                 'C': [1, 10, 100, 1000]},
+                                {'kernel': ['linear'], 'C': [1, 10, 100, 1000]}]
+        elif clf == 'nb':
+            clf = MultinomialNB()
+            tuned_parameters = [{'alpha': [0.001, 0.01, 0.1, 1, 10, 100]}]
 
         # first we find the best configuration in general
         print('GRID SEARCH FOR FOLD {}'.format(fold))

@@ -33,8 +33,8 @@ def predict(clf, X_test, time_dic):
     start_pred = time.time()
     y_pred = clf.predict(X_test)
     end_pred = time.time()
-    time_dic['pred'] = (end_pred - start_pred)
-    print('Total pred time: {}'.format(time_dic['pred']))
+    time_dic['total_pred'] = (end_pred - start_pred)
+    print('Total pred time: {}'.format(time_dic['total_pred']))
 
     return y_pred
 
@@ -94,7 +94,7 @@ def main():
         X_train, y_train, X_test, y_test = dataset_reader.get_next_fold()
 
         # Create the classifier
-        clf = MetaLazyClassifier(select_features=False,
+        estimator = MetaLazyClassifier(select_features=False,
                                  n_jobs=n_jobs,
                                  grid_size=grid_size)
 
@@ -105,7 +105,7 @@ def main():
         # first we find the best configuration in general
         print('GRID SEARCH FOR FOLD {}'.format(fold))
         start_grid = time.time()
-        grid = GridSearchCV(clf, tuned_parameters, cv=3, scoring='f1_macro', n_jobs=1)
+        grid = GridSearchCV(estimator, tuned_parameters, cv=3, scoring='f1_macro', n_jobs=1)
         grid.fit(X_train, y_train)
         end = time.time()
         print('GENERAL - Total grid time: {}'.format((end - start_grid)))
@@ -113,6 +113,7 @@ def main():
 
         estimator = grid.best_estimator_
         best_param = grid.best_params_
+        estimator.log_time_file = output_path+'/log_times.json'
 
         print('GENERAL - Best param was {}\n'.format(grid.best_params_))
 
@@ -145,6 +146,8 @@ def main():
         times_dataframe = pd.DataFrame(data=times)
         print(times_dataframe.head(10))
         times_dataframe.to_csv(output_path + '/times.csv', index=False)
+
+        estimator.flush_log_time_file()
 
     print(result)
 
