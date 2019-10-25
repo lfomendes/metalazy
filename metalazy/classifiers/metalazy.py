@@ -293,7 +293,6 @@ class MetaLazyClassifier(BaseEstimator, ClassifierMixin):
             # append to file all times
             times = {'size': (until - from_id), 'time_sum_cooc': time_sum_cooc, 'time_sum_weight': time_sum_weight,
                      'time_sum_pred': time_sum_pred}
-            print(times)
 
         return {'pred':pred, 'times':times}
 
@@ -337,7 +336,6 @@ class MetaLazyClassifier(BaseEstimator, ClassifierMixin):
         for item in results_times:
             results.append(item['pred'])
             times_n.append(item['times'])
-        print('\n\n')
         pred = np.concatenate(results, axis=0)
         end = time.time()
 
@@ -364,7 +362,5 @@ class MetaLazyClassifier(BaseEstimator, ClassifierMixin):
         Write the times reported to a file
         :return:
         '''
-        print(self.log_time_file)
-        print(self.times)
         with open(self.log_time_file, 'a') as fout:
             json.dump(self.times, fout)
