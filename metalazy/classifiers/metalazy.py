@@ -269,7 +269,6 @@ class MetaLazyClassifier(BaseEstimator, ClassifierMixin):
                 # Trying the oversample
                 X_t, y_t = DistanceBasedWeight.oversample(X_t, y_t, weights=weights, m=2)
             end = time.time()
-
             if self.log_time_file: time_sum_weight.append(end - start)
 
             start = time.time()
