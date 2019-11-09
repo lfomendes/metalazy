@@ -40,7 +40,7 @@ def predict(clf, X_test, time_dic):
 
 
 def choose_tunning_parameters(specific, weight, coccurrence):
-    tuned_parameters = [{'n_neighbors': [100]}]
+    tuned_parameters = [{'n_neighbors': [200]}]
 
     classifiers = ['logistic', 'nb', 'extrarf']
     if coccurrence == 1:

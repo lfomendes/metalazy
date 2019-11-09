@@ -196,6 +196,11 @@ class MetaLazyClassifier(BaseEstimator, ClassifierMixin):
         self.times = []
 
         # Fit the kNN classifier
+        if self.n_neighbors > self.X_train.shape[0]:
+            print('Warning - the neighbors size {} is larger than the train set {}, using train size instead'.format(
+                self.n_neighbors, self.X_train.shape[0]))
+            self.n_neighbors = self.X_train.shape[0]
+
         self.kNN = NearestNeighbors(n_jobs=self.n_jobs, n_neighbors=self.n_neighbors, algorithm='brute',
                                     metric=self.metric)
         self.kNN.fit(self.X_train, self.y_train)
@@ -204,8 +209,8 @@ class MetaLazyClassifier(BaseEstimator, ClassifierMixin):
         if self.specific_classifier:
             # choose the weaker classifier
             # print('Weaker Parameter')
-            # best_score, self.weaker = self.avaliate_weaker(self.specific_classifier, self.X_train, self.y_train, score='f1_macro')
-            self.weaker = self.set_classifier(self.specific_classifier)
+             best_score, self.weaker = self.avaliate_weaker(self.specific_classifier, self.X_train, self.y_train, score='f1_macro')
+            # self.weaker = self.set_classifier(self.specific_classifier)
             # print('found')
         else:
             # test which classifier is the best for this specific dataset
@@ -293,7 +298,7 @@ class MetaLazyClassifier(BaseEstimator, ClassifierMixin):
             times = {'size': (until - from_id), 'time_sum_cooc': time_sum_cooc, 'time_sum_weight': time_sum_weight,
                      'time_sum_pred': time_sum_pred}
 
-        return {'pred':pred, 'times':times}
+        return {'pred': pred, 'times': times}
 
     def predict_proba(self, X):
 
@@ -339,7 +344,7 @@ class MetaLazyClassifier(BaseEstimator, ClassifierMixin):
         end = time.time()
 
         if self.log_time_file:
-            self.times.append({'total_pred': (end - start), 'size': len(dists), 'proccess':times_n})
+            self.times.append({'total_pred': (end - start), 'size': len(dists), 'proccess': times_n})
 
         return pred
 
