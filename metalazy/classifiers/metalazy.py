@@ -40,10 +40,10 @@ class MetaLazyClassifier(BaseEstimator, ClassifierMixin):
         #               'solver': ['liblinear'], 'C': [1.0], 'max_iter': [500]},
         #
         'extrarf': [{'criterion': ['gini'], 'max_features': ['log2'], 'class_weight': ['balanced'],
-                     'n_estimators': [200]}],
-        'nb': {'alpha': [0.001, 0.01, 0.1, 1, 10, 100]},
+                     'n_estimators': [100]}],
+        'nb': {'alpha': [0.01, 0.1, 1, 10]},
         'logistic': [{'penalty': ['l2'], 'class_weight': ['balanced'],
-                      'solver': ['liblinear'], 'C': [10], 'max_iter': [300]},
+                      'solver': ['liblinear'], 'C': [1.0,0.1], 'max_iter': [300]},
                      # {'solver': ['lbfgs'], 'C': [1, 10, 0.1, 0.01],
                      #  'class_weight': ['balanced', None],
                      #  'multi_class': ['ovr', 'multinomial']}

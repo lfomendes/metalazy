@@ -44,7 +44,7 @@ def choose_tunning_parameters(specific, weight, coccurrence):
 
     classifiers = ['logistic', 'nb', 'extrarf']
     if coccurrence == 1:
-        tuned_parameters[0].update({'number_of_cooccurrences': [0, 10]})
+        tuned_parameters[0].update({'number_of_cooccurrences': [10]})
     if weight == 1:
         tuned_parameters[0].update({'weight_function': ['cosine', 'inverse']})
     if specific == 1:
@@ -204,6 +204,9 @@ def main():
         times_dataframe.to_csv(output_path + '/times.csv', index=False)
 
         estimator.flush_log_time_file()
+
+        #FIXME
+        break
 
     print(result)
 
