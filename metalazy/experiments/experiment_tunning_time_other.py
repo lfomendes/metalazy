@@ -46,7 +46,7 @@ def choose_tunning_parameters(specific, weight, coccurrence):
 
     classifiers = ['logistic', 'nb', 'extrarf']
     if coccurrence == 1:
-        tuned_parameters[0].update({'number_of_cooccurrences': [0,10]})
+        tuned_parameters[0].update({'number_of_cooccurrences': [0, 10]})
     if weight == 1:
         tuned_parameters[0].update({'weight_function': ['cosine', 'inverse']})
     # if specific == 1:
@@ -56,7 +56,9 @@ def choose_tunning_parameters(specific, weight, coccurrence):
 
     return tuned_parameters
 
+
 import copy
+
 
 def main():
     parser = argparse.ArgumentParser()
@@ -101,9 +103,11 @@ def main():
         if clf == 'svc':
             clf = SVC()
             # Set the parameters by cross-validation
-            tuned_parameters = [{'kernel': ['rbf'], 'gamma': [1e-3, 1e-4],
-                                 'C': [1, 10, 100, 1000]},
-                                {'kernel': ['linear'], 'C': [1, 10, 100, 1000]}]
+            tuned_parameters = [{'kernel': ['rbf'], 'gamma': [0.001, 0.01, 0.1, 1, 10],
+                                 'C': [0.1, 1, 10, 100, 1000], 'class_weight': ['balanced', None],
+                                 'probability': [True]},
+                                {'kernel': ['linear'], 'C': [0.1, 1, 10, 100, 1000],
+                                 'class_weight': ['balanced', None], 'probability': [True]}]
         elif clf == 'nb':
             clf = MultinomialNB()
             tuned_parameters = [{'alpha': [0.001, 0.01, 0.1, 1, 10, 100]}]
@@ -114,6 +118,7 @@ def main():
         grid = GridSearchCV(clf, tuned_parameters, cv=3, scoring='f1_macro', n_jobs=1)
         grid.fit(X_train, y_train)
         end = time.time()
+        time_dic['grid'] = (end - start_grid)
         print('GENERAL - Total grid time: {}'.format((end - start_grid)))
         print('GENERAL - Best score was {} with \n {}'.format(grid.best_score_, grid.best_estimator_))
 
@@ -134,7 +139,7 @@ def main():
             'macro': f1_score(y_true=y_test, y_pred=y_pred, average='macro'),
             'micro': f1_score(y_true=y_test, y_pred=y_pred, average='micro'),
             'config': str(grid.best_estimator_),
-            #'best_clf': str(grid.best_estimator_.weaker),
+            # 'best_clf': str(grid.best_estimator_.weaker),
             'fold': str(fold),
         })
 
