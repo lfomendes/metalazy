@@ -40,13 +40,13 @@ def predict(clf, X_test, time_dic):
 
 
 def choose_tunning_parameters(specific, weight, coccurrence):
-    tuned_parameters = [{'n_neighbors': [200]}]
+    tuned_parameters = [{'n_neighbors': [100,200,400]}]
 
-    classifiers = ['logistic', 'nb', 'extrarf']
+    classifiers = ['logistic']
     if coccurrence == 1:
-        tuned_parameters[0].update({'number_of_cooccurrences': [10]})
+        tuned_parameters[0].update({'number_of_cooccurrences': [0,10, 20]})
     if weight == 1:
-        tuned_parameters[0].update({'weight_function': ['cosine', 'inverse']})
+        tuned_parameters[0].update({'weight_function': [None, 'cosine', 'inverse']})
     if specific == 1:
          tuned_parameters[0].update({'specific_classifier': classifiers})
     # else:
@@ -206,7 +206,7 @@ def main():
         estimator.flush_log_time_file()
 
         #FIXME
-        break
+        #break
 
     print(result)
 

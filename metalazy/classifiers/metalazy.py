@@ -42,11 +42,11 @@ class MetaLazyClassifier(BaseEstimator, ClassifierMixin):
         'extrarf': [{'criterion': ['gini'], 'max_features': ['log2'], 'class_weight': ['balanced'],
                      'n_estimators': [100]}],
         'nb': {'alpha': [0.01, 0.1, 1, 10]},
-        'logistic': [{'penalty': ['l2'], 'class_weight': ['balanced'],
+        'logistic': [{'penalty': ['l2'], 'class_weight': [None],
                       'solver': ['liblinear'], 'C': [1.0,0.1], 'max_iter': [300]},
-                     # {'solver': ['lbfgs'], 'C': [1, 10, 0.1, 0.01],
-                     #  'class_weight': ['balanced', None],
-                     #  'multi_class': ['ovr', 'multinomial']}
+                     {'solver': ['lbfgs'], 'C': [1, 0.1, 10],
+                      'class_weight': [None],
+                      'multi_class': ['ovr', 'multinomial']}
                      ]
     }
 

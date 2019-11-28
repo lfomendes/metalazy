@@ -101,13 +101,18 @@ def main():
 
         # Create the classifier
         if clf == 'svc':
-            clf = SVC()
+            clf = SVC({'kernel': 'linear', 'C': 1, 'verbose': False, 'probability': False,
+                       'degree': 3, 'shrinking': True,
+                       'decision_function_shape': None, 'tol': 0.001, 'cache_size': 25000, 'coef0': 0.0,
+                       'gamma': 'auto',
+                       'class_weight': None, 'random_state': 42})
             # Set the parameters by cross-validation
-            tuned_parameters = [{'kernel': ['rbf'], 'gamma': [0.001, 0.01, 0.1, 1, 10],
-                                 'C': [0.1, 1, 10, 100, 1000], 'class_weight': ['balanced', None],
-                                 'probability': [True]},
-                                {'kernel': ['linear'], 'C': [0.1, 1, 10, 100, 1000],
-                                 'class_weight': ['balanced', None], 'probability': [True]}]
+            # 'kernel': ['rbf'], 'gamma': [0.001, 0.01, 0.1, 1, 10],
+            #  'C': [0.1, 1, 10, 100, 1000], 'class_weight': ['balanced', None],
+            #  'probability': [True]},
+            tuned_parameters = [{'kernel': ['linear'], 'C': np.append(2.0 ** np.arange(-5, 15, 2), 1),
+                                 'class_weight': ['balanced', None], 'probability': [False]}]
+            print(tuned_parameters)
         elif clf == 'nb':
             clf = MultinomialNB()
             tuned_parameters = [{'alpha': [0.001, 0.01, 0.1, 1, 10, 100]}]
@@ -155,6 +160,8 @@ def main():
         times_dataframe = pd.DataFrame(data=times)
         print(times_dataframe.head(10))
         times_dataframe.to_csv(output_path + '/times.csv', index=False)
+
+        break
 
     print(result)
 
