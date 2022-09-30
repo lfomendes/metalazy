@@ -1,4 +1,4 @@
-joblib==0.14.0
+joblib==1.2.0
 -e git+https://github.com/lfomendes/metalazy.git@8bd9130d891186cd8ba6c3f1303d483fe16ef7b6#egg=MetaLazy
 numpy==1.17.2
 pkg-resources==0.0.0
